@@ -1,0 +1,10 @@
+{
+  "name": "mri-contractor-onboarding",
+  "private": true,
+  "type": "module",
+  "description": "Roof MRI contractor onboarding: training prep + agreement execution page, Netlify functions, Neon",
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4",
+    "pdf-lib": "^1.17.1"
+  }
+}
