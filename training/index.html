@@ -20,17 +20,18 @@ Two distinct signatures, on purpose:
      signature does not personally bind the people on the roof.
      Rule enforced on training day: no signed waiver, no roof.
 
-ESIGN / UETA CHECKLIST (all stubbed in this prototype)
+ESIGN / UETA CHECKLIST
   [x] Consent to transact electronically (checkbox)
   [x] Affirmative intent to sign (draw or type, then click Sign)
   [x] Attribution: name, title, email + capture IP, user agent,
       timestamp server-side
   [x] Terms version hash stored with each signature (TERMS_VERSION)
-  [ ] Server: generate PDF of executed agreement, email copy to
-      signer (SendGrid, same pattern as re-dry.com intake fn)
-  [ ] Server: store signature image/typed value + metadata in Neon
+  [x] Server: generate PDF of executed agreement, email copy to
+      signer (SendGrid; see netlify/functions/training-agreement.mjs)
+  [x] Server: store signature image/typed value + metadata in Neon
+      (schema now lives in db/schema.sql)
 
-SUGGESTED NEON SCHEMA
+NEON SCHEMA (canonical copy: db/schema.sql)
   trainings(id, token, company, contact_name, contact_email,
             training_date, meet_location, trainer, package,
             format, status, created_at)
@@ -45,10 +46,18 @@ SUGGESTED NEON SCHEMA
                waiver_sig_type, waiver_sig_data, ip, user_agent,
                waiver_signed_at)
 
-ENDPOINT STUBS IN THIS FILE
+ENDPOINTS (implemented as Netlify Functions v2 in netlify/functions/;
+page falls back to demo mode when the API or database is unavailable)
   submitAgreement(payload)  ->  POST /api/training/:token/agreement
   addParticipant(payload)   ->  POST /api/training/:token/participants
+  loadRoster()              ->  GET  /api/training/:token/participants
   submitWaiver(payload)     ->  POST /api/waiver/:ptk/sign
+
+FORMAT RENDERS
+  trainings.format = 'onsite' (default) or 'nashville'. Preview the
+  Nashville render with ?format=nashville (travel/hotel prep, ReDry
+  facility, roof provided by ReDry, adjusted day-of cancellation).
+  Nashville policy copy is DRAFT and needs Adam's sign-off.
 
 DESIGN RULES (standing, per Adam)
   White/light backgrounds only. Brand navy #1E2C55 and green
@@ -274,6 +283,7 @@ DESIGN RULES (standing, per Adam)
   .p-who span{font-size:13px;color:var(--sub)}
   .p-link{font-family:var(--mono);font-size:11.5px;color:var(--sub);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:4px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .p-status{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--yellow);color:var(--navy);border-radius:4px;padding:4px 9px}
+  .p-status.signed{border-color:var(--green)}
   .btn.mini{padding:7px 13px;font-size:11px}
   .preview-link{margin-top:20px;display:inline-block;font-size:14.5px;color:var(--navy)}
 
@@ -318,9 +328,9 @@ DESIGN RULES (standing, per Adam)
   <section class="meta-card">
     <div class="eyebrow">Roof MRI Certification Training</div>
     <h1>Summit Commercial Roofing</h1>
-    <div class="meta-grid">
+    <div class="meta-grid" id="metaGrid">
       <div class="cell"><span class="k">Training Date</span><span class="v">Thu, Aug 13, 2026</span></div>
-      <div class="cell"><span class="k">Meet</span><span class="v">8:00 AM, Summit's Office</span></div>
+      <div class="cell"><span class="k">Meet</span><span class="v" id="metaMeet">8:00 AM, Summit's Office</span></div>
       <div class="cell"><span class="k">Trainer</span><span class="v">Adam Capps</span></div>
       <div class="cell"><span class="k">Package</span><span class="v">Professional</span></div>
     </div>
@@ -334,7 +344,7 @@ DESIGN RULES (standing, per Adam)
     <div class="prep">
       <div class="prep-item">
         <span class="sq"></span>
-        <div>
+        <div id="prepRoofs">
           <h3>Send your roof addresses</h3>
           <p>Training works best on a roof where you can deliver a real moisture report and create an immediate opportunity. Standard commercial flat or low-slope roofs only. No shingle, metal, or steep-slope. Ballasted and gravel BUR roofs are not great for training, but we can tackle one as a second option. You are responsible for securing roof access and making sure the roofs are safe for training.</p>
           <span class="chip">Due 3 business days before training</span>
@@ -342,7 +352,7 @@ DESIGN RULES (standing, per Adam)
       </div>
       <div class="prep-item">
         <span class="sq"></span>
-        <div>
+        <div id="prepRoom">
           <h3>Line up the training room</h3>
           <p>We meet at your office, or a nearby ABC Supply location if space is tight. Have a TV or monitor everyone can see, plus floor space to lay out a 4x8 sheet of insulation and membrane.</p>
         </div>
@@ -372,7 +382,7 @@ DESIGN RULES (standing, per Adam)
       <div class="t-row">
         <span class="t-time">8:00 AM</span>
         <h3>Meet and set up</h3>
-        <p>We meet at your office or the ABC Supply location. Coffee helps.</p>
+        <p id="tMeetP">We meet at your office or the ABC Supply location. Coffee helps.</p>
       </div>
       <div class="t-row">
         <span class="t-time">8:30 to 10:30 AM</span>
@@ -391,8 +401,8 @@ DESIGN RULES (standing, per Adam)
       </div>
       <div class="t-row">
         <span class="t-time">Afternoon</span>
-        <h3>Roof scanning on your building(s)</h3>
-        <p>We head to one or two of your roofs and apply everything with live data. Walking a real grid, taking real readings, building your scanning rhythm.</p>
+        <h3 id="tRoofH">Roof scanning on your building(s)</h3>
+        <p id="tRoofP">We head to one or two of your roofs and apply everything with live data. Walking a real grid, taking real readings, building your scanning rhythm.</p>
       </div>
     </div>
   </section>
@@ -434,11 +444,11 @@ DESIGN RULES (standing, per Adam)
         <span class="sq2"></span>
         <div>
           <h3>Day-of cancellation</h3>
-          <p>If the trainer arrives and training can't happen for any reason, a new date is set and the full cost of the training is repaid.</p>
+          <p id="dayofP">If the trainer arrives and training can't happen for any reason, a new date is set and the full cost of the training is repaid.</p>
         </div>
       </div>
     </div>
-    <p class="policy-note">This policy comes from experience. Clear communication keeps everything running smoothly.</p>
+    <p class="policy-note" id="policyNote">This policy comes from experience. Clear communication keeps everything running smoothly.</p>
   </section>
 
   <!-- E: AGREEMENT -->
@@ -729,6 +739,36 @@ DESIGN RULES (standing, per Adam)
    exactly which text a signer agreed to. Bump when terms change. */
 const TERMS_VERSION = "2026-07-02.1";
 const TRAINING_TOKEN = "demo-token"; /* injected server-side in prod */
+/* Prod injects trainings.format server-side; ?format=nashville previews it.
+   Prod waiver URLs are /training/{token}/w/{ptk}; ?ptk= stands in for now. */
+const TRAINING_FORMAT = new URLSearchParams(location.search).get('format') === 'nashville' ? 'nashville' : 'onsite';
+const WAIVER_PTK = new URLSearchParams(location.search).get('ptk');
+
+/* ── Nashville format render ───────────── */
+if (TRAINING_FORMAT === 'nashville') {
+  /* Street address of the ReDry facility gets injected server-side. */
+  document.getElementById('metaMeet').textContent = '8:00 AM, ReDry Training Facility';
+  const loc = document.createElement('div');
+  loc.className = 'cell';
+  loc.innerHTML = '<span class="k">Location</span><span class="v">Nashville, TN</span>';
+  document.getElementById('metaGrid').appendChild(loc);
+  document.getElementById('prepRoofs').innerHTML =
+    '<h3>Book your travel</h3>' +
+    '<p>This training runs at the ReDry facility in Nashville, TN. Book flights and a hotel nearby; we will send a short list of recommended hotels close to the facility. Plan to arrive the evening before so we can start at 8:00 AM sharp. The training roof is provided by ReDry, so there is nothing to line up on your end.</p>' +
+    '<span class="chip">Book at least 2 weeks out</span>';
+  document.getElementById('prepRoom').innerHTML =
+    '<h3>Training room is covered</h3>' +
+    '<p>The classroom, the TV, and the 4x8 insulation and membrane layout are all set up at the ReDry facility. Just bring your crew.</p>';
+  document.getElementById('tMeetP').textContent =
+    'We meet at the ReDry Training Facility in Nashville. Coffee helps.';
+  document.getElementById('tRoofH').textContent = 'Roof scanning at the ReDry training roof';
+  document.getElementById('tRoofP').textContent =
+    'We head up to the training roof at the ReDry facility and apply everything with live data. Walking a real grid, taking real readings, building your scanning rhythm.';
+  document.getElementById('dayofP').textContent =
+    'If your crew does not arrive at the facility and training cannot happen for any reason, a new date is set and the full cost of the training is repaid.';
+  document.getElementById('policyNote').textContent =
+    'This policy comes from experience. Clear communication keeps everything running smoothly. For Nashville trainings, travel and lodging are booked and paid by you and are not refunded by ReDry if a session is rescheduled.';
+}
 
 /* ── Accordion ─────────────────────────── */
 document.querySelectorAll('.acc-btn').forEach(btn => {
@@ -851,52 +891,105 @@ btnSign.addEventListener('click', async () => {
     signed_at: new Date().toISOString()
     /* server adds: ip, user_agent; generates PDF; sends copy via email */
   };
-  await submitAgreement(payload);
+  const result = await submitAgreement(payload);
   document.getElementById('rSigner').textContent = payload.signer_name;
   document.getElementById('rTitle').textContent = payload.signer_title;
   document.getElementById('rWhen').textContent = new Date().toLocaleString();
   document.getElementById('rVersion').textContent = TERMS_VERSION;
+  if (result.demo) {
+    document.querySelector('.exec-mail').textContent =
+      'Demo mode: signature recorded locally only, no email sent. Next step: add your crew below so everyone can sign their field waiver before training day.';
+  }
   document.getElementById('signCard').style.display = 'none';
   document.getElementById('executed').classList.add('show');
   document.getElementById('roster').classList.add('show');
+  startRosterPolling();
   document.getElementById('executed').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
 async function submitAgreement(payload) {
-  /* PROD: POST /api/training/:token/agreement  (Netlify fn -> Neon) */
-  console.log('submitAgreement', payload);
-  return new Promise(r => setTimeout(r, 600));
+  /* POST /api/training/:token/agreement (Netlify fn -> Neon). Server adds
+     ip and user agent, stores the signature, generates the executed PDF,
+     and emails it. Falls back to demo mode when the API or database is
+     unavailable, so deploy previews keep working. */
+  try {
+    const res = await fetch('/api/training/' + TRAINING_TOKEN + '/agreement', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (err) {
+    console.warn('submitAgreement: demo mode (' + err.message + ')', payload);
+    return { ok: true, demo: true };
+  }
 }
 
 /* ── Roster ────────────────────────────── */
 const pList = document.getElementById('pList');
+let roster = []; /* {name, email, waiver_token, signed} */
+let rosterTimer = null;
+
+function rosterRow(p) {
+  const row = document.createElement('div');
+  row.className = 'p-row';
+  row.innerHTML =
+    '<div class="p-who"><b>' + esc(p.name) + '</b><span>' + esc(p.email) + '</span></div>' +
+    '<span class="p-link">connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + esc(p.waiver_token) + '</span>' +
+    '<button class="btn mini" type="button">Copy link</button>' +
+    '<span class="p-status' + (p.signed ? ' signed' : '') + '">' + (p.signed ? 'Signed' : 'Awaiting signature') + '</span>';
+  row.querySelector('button').addEventListener('click', e => {
+    navigator.clipboard && navigator.clipboard.writeText(
+      'https://connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + p.waiver_token);
+    e.target.textContent = 'Copied';
+    setTimeout(() => e.target.textContent = 'Copy link', 1500);
+  });
+  return row;
+}
+function renderRoster() {
+  pList.innerHTML = '';
+  roster.forEach(p => pList.appendChild(rosterRow(p)));
+}
+async function loadRoster() {
+  /* GET /api/training/:token/participants flips status chips to Signed as
+     waivers come in. In demo mode the local list stays as-is. */
+  try {
+    const res = await fetch('/api/training/' + TRAINING_TOKEN + '/participants');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    roster = (await res.json()).participants;
+    renderRoster();
+  } catch (err) { /* demo mode */ }
+}
+function startRosterPolling() {
+  loadRoster();
+  if (!rosterTimer) rosterTimer = setInterval(loadRoster, 20000);
+}
+
 document.getElementById('btnAddP').addEventListener('click', async () => {
   const name = document.getElementById('pName').value.trim();
   const email = document.getElementById('pEmail').value.trim();
   if (name.length < 2 || !/.+@.+\..+/.test(email)) return;
-  const ptk = Math.random().toString(36).slice(2, 10);
-  await addParticipant({ token: TRAINING_TOKEN, name, email, waiver_token: ptk });
-  const row = document.createElement('div');
-  row.className = 'p-row';
-  row.innerHTML =
-    '<div class="p-who"><b>' + esc(name) + '</b><span>' + esc(email) + '</span></div>' +
-    '<span class="p-link">connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + ptk + '</span>' +
-    '<button class="btn mini" type="button" data-copy="' + ptk + '">Copy link</button>' +
-    '<span class="p-status">Awaiting signature</span>';
-  pList.appendChild(row);
-  row.querySelector('[data-copy]').addEventListener('click', e => {
-    navigator.clipboard && navigator.clipboard.writeText(
-      'https://connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + ptk);
-    e.target.textContent = 'Copied';
-    setTimeout(() => e.target.textContent = 'Copy link', 1500);
-  });
+  roster.push(await addParticipant({ name, email }));
+  renderRoster();
   document.getElementById('pName').value = '';
   document.getElementById('pEmail').value = '';
 });
 async function addParticipant(p) {
-  /* PROD: POST /api/training/:token/participants
-     Server emails each trainee their unique waiver link. */
-  console.log('addParticipant', p);
+  /* POST /api/training/:token/participants. The server generates the waiver
+     token and emails the trainee their unique signing link. */
+  try {
+    const res = await fetch('/api/training/' + TRAINING_TOKEN + '/participants', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return (await res.json()).participant;
+  } catch (err) {
+    console.warn('addParticipant: demo mode (' + err.message + ')', p);
+    return { name: p.name, email: p.email, waiver_token: Math.random().toString(36).slice(2, 10), signed: false };
+  }
 }
 function esc(s) {
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -930,8 +1023,8 @@ btnWaiver.addEventListener('click', async () => {
   btnWaiver.disabled = true;
   btnWaiver.textContent = 'Signing...';
   await submitWaiver({
-    waiver_token: 'demo-ptk',
     name: wName.value.trim(),
+    sig_type: 'draw',
     sig_data: padWaiver.data(),
     terms_version: TERMS_VERSION,
     signed_at: new Date().toISOString()
@@ -941,10 +1034,27 @@ btnWaiver.addEventListener('click', async () => {
   document.getElementById('wExecuted').classList.add('show');
 });
 async function submitWaiver(p) {
-  /* PROD: POST /api/waiver/:ptk/sign  (updates participants row,
-     flips roster status chip, notifies Adam/Regina when all signed) */
-  console.log('submitWaiver', p);
-  return new Promise(r => setTimeout(r, 500));
+  /* POST /api/waiver/:ptk/sign (Netlify fn -> Neon). Server stores the
+     signature with ip and user agent, flips the roster status chip, and
+     notifies Adam/Regina once the whole crew has signed. */
+  try {
+    const res = await fetch('/api/waiver/' + (WAIVER_PTK || 'demo-ptk') + '/sign', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(p)
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    return await res.json();
+  } catch (err) {
+    console.warn('submitWaiver: demo mode (' + err.message + ')', p);
+    return { ok: true, demo: true };
+  }
+}
+
+/* Arriving on a waiver link (?ptk=...) opens the waiver view directly. */
+if (WAIVER_PTK) {
+  document.body.classList.add('show-waiver');
+  padWaiver = new Pad(document.getElementById('padWaiver'), validateWaiver);
 }
 
 /* Keep canvases crisp on resize (clears strokes; fine for prototype) */

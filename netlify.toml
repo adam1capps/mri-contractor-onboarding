@@ -1,0 +1,10 @@
+# Netlify config for the contractor-onboarding project.
+# Static site publishes from the repo root (training/index.html, _redirects).
+# API routes are Netlify Functions v2 with custom paths, see netlify/functions/.
+
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
