@@ -1,0 +1,3 @@
+# Prototype convenience: land the bare preview URL on the training page.
+# Prod routing (connect.roof-mri.com/training/{token}) will replace this.
+/  /training/  302
