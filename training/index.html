@@ -1,0 +1,961 @@
+<!DOCTYPE html>
+<!--
+═══════════════════════════════════════════════════════════════════
+ROOF MRI | TRAINING PREP + AGREEMENT EXECUTION PAGE (PROTOTYPE)
+Build notes for the Claude Code / Claude Design session
+═══════════════════════════════════════════════════════════════════
+
+INTENT
+One personalized URL per booked training, living in the Roof MRI
+Connect stack (Netlify functions + Neon), e.g.:
+
+  connect.roof-mri.com/training/{token}          (this page)
+  connect.roof-mri.com/training/{token}/w/{ptk}  (participant waiver)
+
+Two distinct signatures, on purpose:
+  1. COMPANY AGREEMENT: authorized signer executes the Training
+     Agreement (payment, certification, IP, cancellation terms).
+  2. PARTICIPANT WAIVERS: every individual trainee signs a personal
+     field waiver. Agreement Section 5(a) requires this; a company
+     signature does not personally bind the people on the roof.
+     Rule enforced on training day: no signed waiver, no roof.
+
+ESIGN / UETA CHECKLIST (all stubbed in this prototype)
+  [x] Consent to transact electronically (checkbox)
+  [x] Affirmative intent to sign (draw or type, then click Sign)
+  [x] Attribution: name, title, email + capture IP, user agent,
+      timestamp server-side
+  [x] Terms version hash stored with each signature (TERMS_VERSION)
+  [ ] Server: generate PDF of executed agreement, email copy to
+      signer (SendGrid, same pattern as re-dry.com intake fn)
+  [ ] Server: store signature image/typed value + metadata in Neon
+
+SUGGESTED NEON SCHEMA
+  trainings(id, token, company, contact_name, contact_email,
+            training_date, meet_location, trainer, package,
+            format, status, created_at)
+            /* format: 'onsite' = trainer travels to contractor
+               (this build). 'nashville' render comes later:
+               travel/hotel info, ReDry facility address, roof
+               provided by ReDry, adjusted cancellation terms. */
+  agreements(id, training_id, signer_name, signer_title,
+             signer_email, sig_type, sig_data, ip, user_agent,
+             terms_version, signed_at, pdf_url)
+  participants(id, training_id, name, email, waiver_token,
+               waiver_sig_type, waiver_sig_data, ip, user_agent,
+               waiver_signed_at)
+
+ENDPOINT STUBS IN THIS FILE
+  submitAgreement(payload)  ->  POST /api/training/:token/agreement
+  addParticipant(payload)   ->  POST /api/training/:token/participants
+  submitWaiver(payload)     ->  POST /api/waiver/:ptk/sign
+
+DESIGN RULES (standing, per Adam)
+  White/light backgrounds only. Brand navy #1E2C55 and green
+  #00BD70 as text and borders only, never as fills. Logo squares
+  are the sole exception at mark scale. Trebuchet MS throughout.
+  No em dashes anywhere in copy.
+═══════════════════════════════════════════════════════════════════
+-->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Your Roof MRI Certification Training | Summit Commercial Roofing</title>
+<style>
+  :root{
+    --navy:#1E2C55;
+    --green:#00BD70;
+    --yellow:#E8A614;
+    --red:#D6453C;
+    --ink:#333333;
+    --sub:#5C6478;
+    --line:#DFE4EE;
+    --panel:#F7F9FC;
+    --paper:#FFFFFF;
+    --mono:"Courier New", ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  @media (prefers-reduced-motion: reduce){
+    html{scroll-behavior:auto}
+    *,*::before,*::after{transition:none!important;animation:none!important}
+  }
+  body{
+    font-family:"Trebuchet MS", Tahoma, Verdana, sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    font-size:16.5px;
+    line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:860px;margin:0 auto;padding:0 22px}
+
+  /* ── Header ─────────────────────────────── */
+  header.site{border-bottom:2px solid var(--navy);background:var(--paper)}
+  .site-inner{display:flex;align-items:center;justify-content:space-between;padding:18px 0;gap:16px;flex-wrap:wrap}
+  .wordmark{display:flex;align-items:center;gap:10px;text-decoration:none}
+  .mark-squares{display:flex;gap:3px}
+  .mark-squares i{width:10px;height:10px;display:block}
+  .mark-squares i:nth-child(1){background:var(--green)}
+  .mark-squares i:nth-child(2){background:var(--yellow)}
+  .mark-squares i:nth-child(3){background:var(--red)}
+  .wordmark b{font-size:19px;letter-spacing:.06em;color:var(--navy)}
+  .tagline{font-size:12px;letter-spacing:.05em;color:var(--sub);text-transform:uppercase}
+  @media (max-width:560px){.tagline{display:none}}
+
+  /* ── Meta card ──────────────────────────── */
+  .meta-card{border:1.5px solid var(--navy);border-radius:10px;padding:30px 32px;margin:36px 0 8px}
+  .eyebrow{font-size:12px;font-weight:700;letter-spacing:.16em;text-transform:uppercase;color:var(--green);margin-bottom:10px}
+  .meta-card h1{font-size:clamp(26px,4.6vw,38px);line-height:1.15;color:var(--navy);margin-bottom:18px}
+  .meta-grid{display:flex;flex-wrap:wrap;gap:10px 34px;border-top:1px solid var(--line);padding-top:16px}
+  .meta-grid .cell{min-width:150px}
+  .meta-grid .k{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);display:block;margin-bottom:2px}
+  .meta-grid .v{font-weight:700;color:var(--navy);font-size:15.5px}
+  .lede{margin:22px 0 0;color:var(--ink);max-width:64ch}
+
+  /* ── Sections ───────────────────────────── */
+  main{padding-bottom:90px}
+  section.block{margin-top:60px}
+  .sec-head{display:flex;align-items:center;gap:14px;margin-bottom:8px}
+  .grid-ref{
+    font-family:var(--mono);font-size:13px;font-weight:700;color:var(--green);
+    border:1.5px solid var(--green);width:34px;height:34px;border-radius:6px;
+    display:flex;align-items:center;justify-content:center;flex:none;
+  }
+  .sec-head h2{font-size:23px;color:var(--navy);line-height:1.2}
+  .sec-sub{color:var(--sub);margin-bottom:26px;font-size:15.5px}
+
+  /* Prep checklist */
+  .prep{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--line)}
+  .prep-item{display:flex;gap:18px;padding:24px 4px;border-bottom:1px solid var(--line)}
+  .sq{width:13px;height:13px;border:2px solid var(--navy);border-radius:3px;flex:none;margin-top:7px}
+  .prep-item h3{font-size:17px;color:var(--navy);margin-bottom:5px}
+  .prep-item p{font-size:15.5px;color:var(--ink)}
+  .chip{
+    display:inline-block;margin-top:10px;font-family:var(--mono);font-size:11.5px;
+    letter-spacing:.06em;color:var(--navy);border:1px solid var(--navy);
+    border-radius:4px;padding:3px 9px;text-transform:uppercase;
+  }
+
+  /* Day timeline */
+  .timeline{border-left:2px solid var(--navy);margin-left:8px;padding-left:0}
+  .t-row{position:relative;padding:0 0 30px 30px}
+  .t-row:last-child{padding-bottom:6px}
+  .t-row::before{
+    content:"";position:absolute;left:-8px;top:7px;width:12px;height:12px;
+    background:var(--paper);border:2.5px solid var(--green);border-radius:3px;
+  }
+  .t-time{font-family:var(--mono);font-size:12.5px;font-weight:700;letter-spacing:.08em;color:var(--green);text-transform:uppercase}
+  .t-row h3{font-size:17.5px;color:var(--navy);margin:3px 0 4px}
+  .t-row p{font-size:15.5px;max-width:60ch}
+
+  /* After list */
+  .after{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:640px){.after{grid-template-columns:1fr}}
+  .after-item{border:1px solid var(--line);border-radius:8px;padding:18px 20px;background:var(--panel)}
+  .after-item h3{font-size:15.5px;color:var(--navy);margin-bottom:4px}
+  .after-item p{font-size:14.5px;color:var(--ink)}
+
+  /* Policy tiers */
+  .policy{display:flex;flex-direction:column;gap:14px}
+  .tier{display:flex;gap:16px;align-items:flex-start;border:1px solid var(--line);border-radius:8px;padding:18px 20px}
+  .tier .sq2{width:14px;height:14px;border-radius:3px;flex:none;margin-top:6px;border:2px solid}
+  .tier.ok .sq2{border-color:var(--green)}
+  .tier.warn .sq2{border-color:var(--yellow)}
+  .tier.stop .sq2{border-color:var(--red)}
+  .tier h3{font-size:16px;color:var(--navy);margin-bottom:3px}
+  .tier p{font-size:15px}
+  .tier .amt{font-family:var(--mono);font-weight:700}
+  .policy-note{margin-top:14px;font-size:14.5px;color:var(--sub);font-style:italic}
+
+  /* Agreement accordion */
+  .plain{border:1.5px solid var(--green);border-radius:8px;padding:16px 20px;margin-bottom:26px;font-size:15px}
+  .plain b{color:var(--navy)}
+  .acc{border-top:1px solid var(--line)}
+  .acc-item{border-bottom:1px solid var(--line)}
+  .acc-btn{
+    width:100%;background:none;border:none;cursor:pointer;text-align:left;
+    display:flex;align-items:center;gap:14px;padding:17px 4px;
+    font-family:inherit;
+  }
+  .acc-btn:focus-visible{outline:2px solid var(--green);outline-offset:2px;border-radius:4px}
+  .acc-num{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green);width:22px;flex:none}
+  .acc-title{font-size:15.5px;font-weight:700;color:var(--navy);flex:1}
+  .acc-chev{flex:none;color:var(--navy);transition:transform .2s ease}
+  .acc-item.open .acc-chev{transform:rotate(180deg)}
+  .acc-body{max-height:0;overflow:hidden;transition:max-height .25s ease}
+  .acc-body-inner{padding:2px 4px 22px 40px;font-size:14.8px;color:var(--ink)}
+  .acc-body-inner p{margin-bottom:10px}
+  .acc-body-inner p:last-child{margin-bottom:0}
+  .acc-body-inner .sub{font-weight:700;color:var(--navy)}
+
+  /* Signing card */
+  .sign-card{border:1.5px solid var(--navy);border-radius:10px;padding:30px 32px;margin-top:34px}
+  .sign-card h3{font-size:19px;color:var(--navy);margin-bottom:4px}
+  .sign-card .hint{font-size:14.5px;color:var(--sub);margin-bottom:22px}
+  .fields{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px}
+  @media (max-width:560px){.fields{grid-template-columns:1fr}}
+  .field label{display:block;font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);margin-bottom:5px}
+  .field input{
+    width:100%;border:1.5px solid var(--line);border-radius:6px;padding:11px 12px;
+    font-family:inherit;font-size:15.5px;color:var(--ink);background:var(--paper);
+  }
+  .field input:focus{outline:none;border-color:var(--green)}
+  .field input[readonly]{background:var(--panel);color:var(--sub)}
+  .consents{display:flex;flex-direction:column;gap:12px;margin:4px 0 22px}
+  .consent{display:flex;gap:11px;align-items:flex-start;font-size:14.5px;cursor:pointer}
+  .consent input{margin-top:4px;width:16px;height:16px;accent-color:var(--green);flex:none}
+
+  .sig-tabs{display:flex;gap:8px;margin-bottom:10px}
+  .sig-tab{
+    font-family:inherit;font-size:12.5px;font-weight:700;letter-spacing:.05em;
+    text-transform:uppercase;border:1.5px solid var(--line);background:var(--paper);
+    color:var(--sub);border-radius:6px;padding:7px 14px;cursor:pointer;
+  }
+  .sig-tab.active{border-color:var(--navy);color:var(--navy)}
+  .pad-shell{border:1.5px solid var(--navy);border-radius:8px;background:var(--paper);position:relative}
+  .pad-shell canvas{display:block;width:100%;height:170px;border-radius:8px;touch-action:none;cursor:crosshair}
+  .pad-base{position:absolute;left:26px;right:26px;bottom:38px;border-bottom:1px solid var(--line);pointer-events:none}
+  .pad-x{position:absolute;left:26px;bottom:44px;font-family:var(--mono);color:var(--sub);font-size:13px;pointer-events:none}
+  .pad-tools{display:flex;justify-content:space-between;align-items:center;margin-top:8px}
+  .pad-label{font-family:var(--mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--sub)}
+  .linkish{background:none;border:none;font-family:inherit;font-size:13px;color:var(--navy);text-decoration:underline;cursor:pointer}
+  .type-shell{display:none}
+  .type-shell input{
+    width:100%;border:1.5px solid var(--navy);border-radius:8px;padding:20px;
+    font-family:"Trebuchet MS", sans-serif;font-style:italic;font-size:30px;
+    color:var(--navy);background:var(--paper);
+  }
+  .type-shell input:focus{outline:none;border-color:var(--green)}
+  .sig-mode-type .pad-wrap{display:none}
+  .sig-mode-type .type-shell{display:block}
+
+  .btn{
+    font-family:inherit;font-size:13px;font-weight:700;letter-spacing:.07em;
+    text-transform:uppercase;background:var(--paper);border:2px solid var(--navy);
+    color:var(--navy);border-radius:6px;padding:13px 26px;cursor:pointer;
+    transition:background .15s ease;
+  }
+  .btn:hover:not(:disabled){background:var(--panel)}
+  .btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
+  .btn:disabled{opacity:.38;cursor:not-allowed}
+  .btn.go{border-color:var(--green)}
+  .sign-actions{display:flex;align-items:center;gap:16px;margin-top:22px;flex-wrap:wrap}
+  .sign-note{font-size:13px;color:var(--sub)}
+
+  /* Executed state */
+  .executed{display:none;border:1.5px solid var(--green);border-radius:10px;padding:28px 32px;margin-top:34px}
+  .executed.show{display:block}
+  .exec-head{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+  .exec-check{
+    width:30px;height:30px;border:2px solid var(--green);border-radius:6px;flex:none;
+    display:flex;align-items:center;justify-content:center;color:var(--green);font-weight:700;
+  }
+  .exec-head h3{font-size:19px;color:var(--navy)}
+  .exec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;border-top:1px solid var(--line);padding-top:16px}
+  .exec-grid .k{font-family:var(--mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;color:var(--sub);display:block;margin-bottom:2px}
+  .exec-grid .v{font-size:14.5px;font-weight:700;color:var(--navy);word-break:break-word}
+  .exec-mail{margin-top:16px;font-size:14px;color:var(--sub)}
+
+  /* Roster */
+  #roster{display:none;margin-top:60px}
+  #roster.show{display:block}
+  .roster-add{display:flex;gap:12px;margin-bottom:8px;flex-wrap:wrap}
+  .roster-add input{
+    flex:1;min-width:170px;border:1.5px solid var(--line);border-radius:6px;
+    padding:11px 12px;font-family:inherit;font-size:15px;
+  }
+  .roster-add input:focus{outline:none;border-color:var(--green)}
+  .roster-rule{font-size:14px;color:var(--sub);margin-bottom:18px}
+  .p-row{display:flex;align-items:center;gap:14px;border:1px solid var(--line);border-radius:8px;padding:14px 18px;margin-bottom:10px;flex-wrap:wrap}
+  .p-who{flex:1;min-width:170px}
+  .p-who b{color:var(--navy);display:block;font-size:15.5px}
+  .p-who span{font-size:13px;color:var(--sub)}
+  .p-link{font-family:var(--mono);font-size:11.5px;color:var(--sub);background:var(--panel);border:1px solid var(--line);border-radius:4px;padding:4px 8px;max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .p-status{font-family:var(--mono);font-size:10.5px;letter-spacing:.08em;text-transform:uppercase;border:1.5px solid var(--yellow);color:var(--navy);border-radius:4px;padding:4px 9px}
+  .btn.mini{padding:7px 13px;font-size:11px}
+  .preview-link{margin-top:20px;display:inline-block;font-size:14.5px;color:var(--navy)}
+
+  /* Waiver view */
+  #waiverView{display:none}
+  body.show-waiver #companyView{display:none}
+  body.show-waiver #waiverView{display:block}
+  .back{display:inline-block;margin:26px 0 0;font-size:14px;color:var(--navy)}
+  .waiver-card{border:1.5px solid var(--navy);border-radius:10px;padding:30px 32px;margin:20px 0 60px}
+  .waiver-card h1{font-size:clamp(22px,4vw,30px);color:var(--navy);line-height:1.2;margin-bottom:8px}
+  .waiver-meta{font-family:var(--mono);font-size:12px;color:var(--sub);letter-spacing:.05em;margin-bottom:22px}
+  .clauses{border-top:1px solid var(--line);padding-top:18px;margin-bottom:24px}
+  .clause{display:flex;gap:14px;margin-bottom:16px}
+  .clause .n{font-family:var(--mono);font-size:12px;font-weight:700;color:var(--green);width:20px;flex:none;padding-top:3px}
+  .clause p{font-size:14.8px}
+  .clause b{color:var(--navy)}
+
+  footer{border-top:2px solid var(--navy);padding:26px 0 40px}
+  .foot-inner{display:flex;justify-content:space-between;gap:20px;flex-wrap:wrap;align-items:flex-start}
+  .foot-brand{display:flex;align-items:center;gap:10px}
+  .foot-brand b{color:var(--navy);letter-spacing:.06em;font-size:15px}
+  .foot-tag{font-size:12px;color:var(--sub);margin-top:4px}
+  .foot-legal{font-size:11.5px;color:var(--sub);max-width:420px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<header class="site">
+  <div class="wrap site-inner">
+    <a class="wordmark" href="#">
+      <span class="mark-squares"><i></i><i></i><i></i></span>
+      <b>ROOF MRI</b>
+    </a>
+    <span class="tagline">Advancing the Science of Moisture Detection</span>
+  </div>
+</header>
+
+<!-- ════════════════ COMPANY VIEW ════════════════ -->
+<div id="companyView">
+<main class="wrap">
+
+  <section class="meta-card">
+    <div class="eyebrow">Roof MRI Certification Training</div>
+    <h1>Summit Commercial Roofing</h1>
+    <div class="meta-grid">
+      <div class="cell"><span class="k">Training Date</span><span class="v">Thu, Aug 13, 2026</span></div>
+      <div class="cell"><span class="k">Meet</span><span class="v">8:00 AM, Summit's Office</span></div>
+      <div class="cell"><span class="k">Trainer</span><span class="v">Adam Capps</span></div>
+      <div class="cell"><span class="k">Package</span><span class="v">Professional</span></div>
+    </div>
+    <p class="lede">You're officially on the path to Roof MRI Certification. Done right, this training pays for itself immediately by delivering real value to your clients. Everything you need is on this page: how to prepare, how the day runs, what happens after, and the agreement that makes it official.</p>
+  </section>
+
+  <!-- A: BEFORE -->
+  <section class="block" id="before">
+    <div class="sec-head"><span class="grid-ref">A1</span><h2>Before training day</h2></div>
+    <p class="sec-sub">Four things to knock out this week.</p>
+    <div class="prep">
+      <div class="prep-item">
+        <span class="sq"></span>
+        <div>
+          <h3>Send your roof addresses</h3>
+          <p>Training works best on a roof where you can deliver a real moisture report and create an immediate opportunity. Standard commercial flat or low-slope roofs only. No shingle, metal, or steep-slope. Ballasted and gravel BUR roofs are not great for training, but we can tackle one as a second option. You are responsible for securing roof access and making sure the roofs are safe for training.</p>
+          <span class="chip">Due 3 business days before training</span>
+        </div>
+      </div>
+      <div class="prep-item">
+        <span class="sq"></span>
+        <div>
+          <h3>Line up the training room</h3>
+          <p>We meet at your office, or a nearby ABC Supply location if space is tight. Have a TV or monitor everyone can see, plus floor space to lay out a 4x8 sheet of insulation and membrane.</p>
+        </div>
+      </div>
+      <div class="prep-item">
+        <span class="sq"></span>
+        <div>
+          <h3>Equipment and PPE</h3>
+          <p>Each trainee brings a qualifying moisture detection device. We'll send the specifications ahead of time; limited loaner devices may be available but are not guaranteed. On the roof: non-slip footwear for everyone, and fall protection wherever OSHA, local law, or your trainer requires it.</p>
+        </div>
+      </div>
+      <div class="prep-item">
+        <span class="sq"></span>
+        <div>
+          <h3>Confirm your crew</h3>
+          <p>Tell us exactly who is training. Every participant signs a short field waiver before we step on a roof. You'll add your crew right on this page after the agreement below is signed, and each person gets their own signing link.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- B: TRAINING DAY -->
+  <section class="block" id="day">
+    <div class="sec-head"><span class="grid-ref">B2</span><h2>How training day runs</h2></div>
+    <p class="sec-sub">One day, two halves: classroom in the morning, your roof in the afternoon.</p>
+    <div class="timeline">
+      <div class="t-row">
+        <span class="t-time">8:00 AM</span>
+        <h3>Meet and set up</h3>
+        <p>We meet at your office or the ABC Supply location. Coffee helps.</p>
+      </div>
+      <div class="t-row">
+        <span class="t-time">8:30 to 10:30 AM</span>
+        <h3>Classroom training</h3>
+        <p>The fundamentals of Roof MRI: how the process fits into your workflow, why calibration is everything, and what makes this different from anything else in the industry.</p>
+      </div>
+      <div class="t-row">
+        <span class="t-time">10:30 AM</span>
+        <h3>Hands-on indoor scanning</h3>
+        <p>We start scanning the insulation and membrane laid out inside. This is where the method clicks and you see how Roof MRI behaves in real-world conditions.</p>
+      </div>
+      <div class="t-row">
+        <span class="t-time">12:00 PM</span>
+        <h3>Lunch</h3>
+        <p>We'll grab lunch together and talk shop.</p>
+      </div>
+      <div class="t-row">
+        <span class="t-time">Afternoon</span>
+        <h3>Roof scanning on your building(s)</h3>
+        <p>We head to one or two of your roofs and apply everything with live data. Walking a real grid, taking real readings, building your scanning rhythm.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- C: AFTER -->
+  <section class="block" id="after-sec">
+    <div class="sec-head"><span class="grid-ref">C3</span><h2>After training</h2></div>
+    <p class="sec-sub">Certification is the start, not the finish line.</p>
+    <div class="after">
+      <div class="after-item"><h3>Certification plaque</h3><p>Arrives within a couple of weeks of completing training.</p></div>
+      <div class="after-item"><h3>Roof MRI digital emblem</h3><p>Use it in your marketing to set yourself apart.</p></div>
+      <div class="after-item"><h3>Roof MRI Connect access</h3><p>Your portal for grid requests, reports, and leave-behinds. First grid request in week one.</p></div>
+      <div class="after-item"><h3>Custom branded reporting</h3><p>If we handle your grids and maps, your reports look like they came straight from your team.</p></div>
+      <div class="after-item"><h3>Ongoing support</h3><p>Call, or schedule a FaceTime or Zoom straight from the roof. You're never scanning alone.</p></div>
+      <div class="after-item"><h3>30-day Unlimited MRI trial</h3><p>Complimentary grids and reports for your first month. Your subscription begins when the trial ends.</p></div>
+    </div>
+  </section>
+
+  <!-- D: POLICY -->
+  <section class="block" id="policy-sec">
+    <div class="sec-head"><span class="grid-ref">D4</span><h2>Scheduling and cancellation</h2></div>
+    <p class="sec-sub">There's real demand for these training dates. Here's how changes work.</p>
+    <div class="policy">
+      <div class="tier ok">
+        <span class="sq2"></span>
+        <div>
+          <h3>Weather, with 48-hour notice</h3>
+          <p>Free. We reschedule as soon as possible.</p>
+        </div>
+      </div>
+      <div class="tier warn">
+        <span class="sq2"></span>
+        <div>
+          <h3>Cancellation inside 48 hours</h3>
+          <p>Life happens, but others are waiting on your date. A <span class="amt">$2,500</span> re-booking fee applies.</p>
+        </div>
+      </div>
+      <div class="tier stop">
+        <span class="sq2"></span>
+        <div>
+          <h3>Day-of cancellation</h3>
+          <p>If the trainer arrives and training can't happen for any reason, a new date is set and the full cost of the training is repaid.</p>
+        </div>
+      </div>
+    </div>
+    <p class="policy-note">This policy comes from experience. Clear communication keeps everything running smoothly.</p>
+  </section>
+
+  <!-- E: AGREEMENT -->
+  <section class="block" id="agreement">
+    <div class="sec-head"><span class="grid-ref">E5</span><h2>The Training Agreement</h2></div>
+    <p class="sec-sub">Read each section, then execute below. This is what protects both of us.</p>
+
+    <div class="plain">
+      <b>Plain-English summary:</b> bring people who know roofing, keep your crew safe on the roof, keep our patent-pending methods confidential, certification is individual and stays active with two CTE credits per year, and the cancellation tiers above are binding terms of this agreement.
+    </div>
+
+    <div class="acc" id="acc">
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">01</span><span class="acc-title">Acknowledgment of Roofing Industry Knowledge</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>Client represents that each trainee participating in the Roof MRI training has a basic working knowledge of roofing systems and job site safety procedures.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">02</span><span class="acc-title">Certification, Continuing Education, and Transferability</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>Certification is issued to individual participants only and cannot be transferred to other persons or companies. A company may represent itself as having "Roof MRI certified staff" only if at least one of its current employees holds an active certification. If a certified employee leaves the company, the company may no longer claim to have certified staff unless others are certified.</p>
+          <p class="sub">(a) Continuing Education Requirement</p>
+          <p>Each certified individual must complete a minimum of two (2) continuing training education (CTE) credits per calendar year to maintain active certification status. CTE credit opportunities will be made available by ReDry. Failure to complete the required credits by December 31 of each calendar year will result in suspension of certification until credits are fulfilled.</p>
+          <p class="sub">(b) Company Association</p>
+          <p>Each certified individual's certification is associated with the company under which they were trained. The individual may only represent themselves as a Roof MRI Certified Technician while employed by or actively contracted with that company.</p>
+          <p class="sub">(c) Non-Transferability</p>
+          <p>Certification does not transfer to a new employer. If a certified individual leaves the company under which they were trained, their certification becomes inactive with respect to any new employer unless both of the following conditions are met: (i) the original certifying company provides explicit written permission authorizing the transfer, and (ii) the new employer is also a certified Roof MRI contractor in good standing.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">03</span><span class="acc-title">Pre-Field Training Roof List Requirement</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>No later than three (3) business days prior to field training, Client must provide a list of commercial flat or low-slope roofs for use in training. No shingle, metal, or steep-slope roofs will be accepted. Client is responsible for securing roof access and ensuring the roofs are safe for training. Failure to provide the roof list on time may result in cancellation or rescheduling of training.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">04</span><span class="acc-title">Unlimited MRI Package Subscription</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>Access to the full suite of scanning grids and MRI tools requires an active "Unlimited MRI Package" subscription. If Client opts not to maintain the subscription, Client acknowledges limited access and scanning ability. A 30-day complimentary trial is available for new trainees.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">05</span><span class="acc-title">Safety Requirements and Liability Waiver</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p class="sub">(a) Liability Waiver</p>
+          <p>All participants must sign a waiver acknowledging the risks of rooftop training, including potential injury or death. ReDry is not liable for accidents or injuries except in cases of gross negligence. Individual waivers are executed through this page before field training.</p>
+          <p class="sub">(b) Participant Fitness and Conduct</p>
+          <p>Participants confirm they are medically fit for rooftop activity. Trainers may exclude any individual who appears unfit or unsafe to participate.</p>
+          <p class="sub">(c) Required Personal Protective Equipment (PPE)</p>
+          <p>Participants must wear appropriate PPE, including non-slip footwear. Fall protection gear must be used where required by OSHA, local law, or trainer instruction. Access to the roof will be denied to anyone lacking required gear.</p>
+          <p class="sub">(d) On-Site Safety Procedures</p>
+          <p>Client must provide a safe roof access method (e.g. compliant ladder). ReDry may delay or cancel field activities due to unsafe conditions, including inclement weather.</p>
+          <p class="sub">(e) Age Requirement</p>
+          <p>Participants must be 18 years of age or older.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">06</span><span class="acc-title">Intellectual Property and Confidentiality</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>All training materials, methods, and the Roof MRI process are proprietary and patent-pending. No reproduction, external teaching, sublicensing, or redistribution is allowed. Materials must be handled as confidential and may not be recorded or shared without ReDry's written permission. Unauthorized use may result in legal action and revocation of certification.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">07</span><span class="acc-title">Equipment Requirements</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>Each trainee must bring a qualifying moisture detection device. ReDry will provide equipment specifications beforehand. Limited loaner devices may be available but are not guaranteed. Any borrowed equipment must be returned in original condition or will be billed to Client.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">08</span><span class="acc-title">Scheduling, Cancellation, and Rescheduling</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>Reschedules due to weather with at least 48 hours' notice are free of charge and will be rescheduled as soon as possible. Cancellations inside of 48 hours will incur a $2,500 re-booking fee. If the trainer arrives on the scheduled date and training cannot proceed for any reason attributable to Client, a new date must be set and Client must repay the full cost of the training.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">09</span><span class="acc-title">General Terms</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p class="sub">(a) Governing Law</p>
+          <p>This Agreement will be governed by the laws of the state in which ReDry is headquartered, without regard to conflicts of law principles.</p>
+          <p class="sub">(b) Entire Agreement</p>
+          <p>This document represents the full understanding between the parties and supersedes all prior agreements regarding training.</p>
+          <p class="sub">(c) Amendments</p>
+          <p>This Agreement may be modified only in writing signed by both parties.</p>
+        </div></div>
+      </div>
+
+      <div class="acc-item">
+        <button class="acc-btn" aria-expanded="false">
+          <span class="acc-num">10</span><span class="acc-title">Acknowledgment and Execution</span>
+          <svg class="acc-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <div class="acc-body"><div class="acc-body-inner">
+          <p>By signing below, the undersigned certifies that they are authorized to enter into this Agreement on behalf of the Client and to enroll the listed individuals in the Roof MRI Certification Training.</p>
+        </div></div>
+      </div>
+
+    </div>
+
+    <!-- Signing card -->
+    <div class="sign-card" id="signCard">
+      <h3>Execute the agreement</h3>
+      <p class="hint">Signed by an owner or officer authorized to bind Summit Commercial Roofing.</p>
+
+      <div class="fields">
+        <div class="field"><label for="fCompany">Company</label><input id="fCompany" type="text" value="Summit Commercial Roofing" readonly></div>
+        <div class="field"><label for="fName">Your full legal name</label><input id="fName" type="text" placeholder="First Last" autocomplete="name"></div>
+        <div class="field"><label for="fTitle">Title</label><input id="fTitle" type="text" placeholder="Owner, President, VP..."></div>
+        <div class="field"><label for="fEmail">Email</label><input id="fEmail" type="email" placeholder="you@company.com" autocomplete="email"></div>
+      </div>
+
+      <div class="consents">
+        <label class="consent">
+          <input type="checkbox" id="cEsign">
+          <span>I agree to conduct this transaction electronically and consent to the use of electronic records and signatures.</span>
+        </label>
+        <label class="consent">
+          <input type="checkbox" id="cRead">
+          <span>I have read the full Training Agreement above, I am authorized to sign on behalf of the company, and I agree to be bound by its terms, including the scheduling and cancellation policy.</span>
+        </label>
+      </div>
+
+      <div class="sig-tabs">
+        <button class="sig-tab active" id="tabDraw" type="button">Draw</button>
+        <button class="sig-tab" id="tabType" type="button">Type</button>
+      </div>
+
+      <div id="sigArea">
+        <div class="pad-wrap">
+          <div class="pad-shell">
+            <canvas id="padCompany"></canvas>
+            <span class="pad-base"></span><span class="pad-x">x</span>
+          </div>
+          <div class="pad-tools">
+            <span class="pad-label">Sign inside the box</span>
+            <button class="linkish" id="clearCompany" type="button">Clear</button>
+          </div>
+        </div>
+        <div class="type-shell">
+          <input id="typedName" type="text" placeholder="Type your full name" aria-label="Typed signature">
+        </div>
+      </div>
+
+      <div class="sign-actions">
+        <button class="btn go" id="btnSign" type="button" disabled>Sign the Agreement</button>
+        <span class="sign-note" id="signNote">Fill in your details, check both boxes, and sign to continue.</span>
+      </div>
+    </div>
+
+    <!-- Executed -->
+    <div class="executed" id="executed">
+      <div class="exec-head">
+        <span class="exec-check">✓</span>
+        <h3>Agreement executed</h3>
+      </div>
+      <div class="exec-grid">
+        <div><span class="k">Signer</span><span class="v" id="rSigner">.</span></div>
+        <div><span class="k">Title</span><span class="v" id="rTitle">.</span></div>
+        <div><span class="k">Signed</span><span class="v" id="rWhen">.</span></div>
+        <div><span class="k">Terms Version</span><span class="v" id="rVersion">.</span></div>
+        <div><span class="k">Record</span><span class="v">IP + device captured</span></div>
+      </div>
+      <p class="exec-mail">A PDF copy of the executed agreement is on its way to your email. Next step: add your crew below so everyone can sign their field waiver before training day.</p>
+    </div>
+  </section>
+
+  <!-- G: ROSTER -->
+  <section id="roster">
+    <div class="sec-head"><span class="grid-ref">F6</span><h2>Your crew's field waivers</h2></div>
+    <p class="sec-sub">Add everyone attending. Each person gets their own link to sign the field training waiver.</p>
+    <div class="roster-add">
+      <input id="pName" type="text" placeholder="Trainee full name">
+      <input id="pEmail" type="email" placeholder="Trainee email">
+      <button class="btn mini" id="btnAddP" type="button">Add trainee</button>
+    </div>
+    <p class="roster-rule">Field rule on training day: no signed waiver, no roof.</p>
+    <div id="pList"></div>
+    <a class="preview-link" href="#" id="previewWaiver">Preview the waiver your crew will sign →</a>
+  </section>
+
+</main>
+</div>
+
+<!-- ════════════════ PARTICIPANT WAIVER VIEW ════════════════ -->
+<div id="waiverView">
+  <div class="wrap">
+    <a class="back" href="#" id="backLink">← Back to the training page</a>
+    <div class="waiver-card">
+      <div class="eyebrow">Roof MRI Field Training</div>
+      <h1>Participant Waiver and Release</h1>
+      <p class="waiver-meta">SUMMIT COMMERCIAL ROOFING · TRAINING DATE AUG 13, 2026 · REDRY LLC</p>
+
+      <div class="clauses">
+        <div class="clause"><span class="n">1</span><p><b>Assumption of risk.</b> I understand that rooftop training involves inherent risks, including falls, serious injury, and death. I am participating voluntarily and I accept those risks.</p></div>
+        <div class="clause"><span class="n">2</span><p><b>Fitness.</b> I confirm I am 18 years of age or older, medically fit for rooftop activity, and not impaired by any condition or substance that could compromise my safety or the safety of others.</p></div>
+        <div class="clause"><span class="n">3</span><p><b>Safety compliance.</b> I will wear appropriate personal protective equipment, including non-slip footwear, and will use fall protection where required by OSHA, local law, or trainer instruction. I will follow all trainer instructions, and I understand the trainer may remove me from the roof or the training at any time for safety reasons.</p></div>
+        <div class="clause"><span class="n">4</span><p><b>Release.</b> Except in cases of gross negligence or willful misconduct, I release ReDry LLC, its owners, employees, and trainers from liability for any injury, loss, or damage arising from my participation in this training.</p></div>
+        <div class="clause"><span class="n">5</span><p><b>Electronic signature.</b> I consent to sign this waiver electronically and agree my electronic signature has the same effect as a handwritten one.</p></div>
+      </div>
+
+      <div class="fields">
+        <div class="field"><label for="wName">Your full legal name</label><input id="wName" type="text" placeholder="First Last"></div>
+      </div>
+      <div class="consents">
+        <label class="consent">
+          <input type="checkbox" id="wConsent">
+          <span>I have read this waiver, I understand it, and I agree to its terms.</span>
+        </label>
+      </div>
+
+      <div class="pad-shell">
+        <canvas id="padWaiver"></canvas>
+        <span class="pad-base"></span><span class="pad-x">x</span>
+      </div>
+      <div class="pad-tools">
+        <span class="pad-label">Sign inside the box</span>
+        <button class="linkish" id="clearWaiver" type="button">Clear</button>
+      </div>
+
+      <div class="sign-actions">
+        <button class="btn go" id="btnWaiver" type="button" disabled>Sign the Waiver</button>
+        <span class="sign-note" id="waiverNote">Enter your name, check the box, and sign.</span>
+      </div>
+
+      <div class="executed" id="wExecuted">
+        <div class="exec-head"><span class="exec-check">✓</span><h3>Waiver signed. See you on the roof.</h3></div>
+        <div class="exec-grid">
+          <div><span class="k">Participant</span><span class="v" id="wrName">.</span></div>
+          <div><span class="k">Signed</span><span class="v" id="wrWhen">.</span></div>
+          <div><span class="k">Record</span><span class="v">IP + device captured</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <div class="foot-brand">
+        <span class="mark-squares"><i></i><i></i><i></i></span>
+        <b>ROOF MRI</b>
+      </div>
+      <p class="foot-tag">Advancing the Science of Moisture Detection · roof-mri.com</p>
+    </div>
+    <p class="foot-legal">'Roof MRI™' is a trademark of ReDry®. Any references to our patent-pending methodologies or other proprietary processes remain the exclusive property of ReDry and may not be shared, reproduced, or used without express written permission.</p>
+  </div>
+</footer>
+
+<script>
+/* Terms version travels with every signature so you always know
+   exactly which text a signer agreed to. Bump when terms change. */
+const TERMS_VERSION = "2026-07-02.1";
+const TRAINING_TOKEN = "demo-token"; /* injected server-side in prod */
+
+/* ── Accordion ─────────────────────────── */
+document.querySelectorAll('.acc-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const item = btn.parentElement;
+    const body = item.querySelector('.acc-body');
+    const open = item.classList.toggle('open');
+    btn.setAttribute('aria-expanded', open);
+    body.style.maxHeight = open ? body.scrollHeight + 'px' : 0;
+  });
+});
+
+/* ── Signature pad ─────────────────────── */
+class Pad {
+  constructor(canvas, onChange) {
+    this.c = canvas;
+    this.onChange = onChange || (() => {});
+    this.empty = true;
+    this.resize();
+    this.ctx.strokeStyle = '#1E2C55';
+    this.ctx.lineWidth = 2.2;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+    let down = false;
+    const pos = e => {
+      const r = this.c.getBoundingClientRect();
+      return { x: e.clientX - r.left, y: e.clientY - r.top };
+    };
+    canvas.addEventListener('pointerdown', e => {
+      down = true;
+      canvas.setPointerCapture(e.pointerId);
+      const p = pos(e);
+      this.ctx.beginPath();
+      this.ctx.moveTo(p.x, p.y);
+    });
+    canvas.addEventListener('pointermove', e => {
+      if (!down) return;
+      const p = pos(e);
+      this.ctx.lineTo(p.x, p.y);
+      this.ctx.stroke();
+      if (this.empty) { this.empty = false; this.onChange(); }
+    });
+    ['pointerup','pointercancel','pointerleave'].forEach(ev =>
+      canvas.addEventListener(ev, () => { down = false; }));
+  }
+  resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = this.c.clientWidth, h = this.c.clientHeight || 170;
+    this.c.width = w * dpr;
+    this.c.height = h * dpr;
+    this.ctx = this.c.getContext('2d');
+    this.ctx.scale(dpr, dpr);
+    this.ctx.strokeStyle = '#1E2C55';
+    this.ctx.lineWidth = 2.2;
+    this.ctx.lineCap = 'round';
+    this.ctx.lineJoin = 'round';
+  }
+  clear() {
+    this.ctx.clearRect(0, 0, this.c.width, this.c.height);
+    this.empty = true;
+    this.onChange();
+  }
+  data() { return this.c.toDataURL('image/png'); }
+}
+
+/* ── Company agreement flow ────────────── */
+const fName  = document.getElementById('fName');
+const fTitle = document.getElementById('fTitle');
+const fEmail = document.getElementById('fEmail');
+const cEsign = document.getElementById('cEsign');
+const cRead  = document.getElementById('cRead');
+const btnSign = document.getElementById('btnSign');
+const signNote = document.getElementById('signNote');
+const sigArea = document.getElementById('sigArea');
+const typedName = document.getElementById('typedName');
+let sigMode = 'draw';
+
+const padCompany = new Pad(document.getElementById('padCompany'), validate);
+
+document.getElementById('tabDraw').addEventListener('click', () => setMode('draw'));
+document.getElementById('tabType').addEventListener('click', () => setMode('type'));
+function setMode(m) {
+  sigMode = m;
+  sigArea.classList.toggle('sig-mode-type', m === 'type');
+  document.getElementById('tabDraw').classList.toggle('active', m === 'draw');
+  document.getElementById('tabType').classList.toggle('active', m === 'type');
+  validate();
+}
+
+document.getElementById('clearCompany').addEventListener('click', () => padCompany.clear());
+[fName, fTitle, fEmail, typedName].forEach(el => el.addEventListener('input', validate));
+[cEsign, cRead].forEach(el => el.addEventListener('change', validate));
+
+function hasSignature() {
+  return sigMode === 'draw' ? !padCompany.empty : typedName.value.trim().length > 1;
+}
+function validate() {
+  const ok = fName.value.trim().length > 1 &&
+             fTitle.value.trim().length > 1 &&
+             /.+@.+\..+/.test(fEmail.value) &&
+             cEsign.checked && cRead.checked &&
+             hasSignature();
+  btnSign.disabled = !ok;
+  signNote.textContent = ok
+    ? 'Ready. Clicking sign creates a legally binding electronic signature.'
+    : 'Fill in your details, check both boxes, and sign to continue.';
+}
+
+btnSign.addEventListener('click', async () => {
+  btnSign.disabled = true;
+  btnSign.textContent = 'Signing...';
+  const payload = {
+    token: TRAINING_TOKEN,
+    signer_name: fName.value.trim(),
+    signer_title: fTitle.value.trim(),
+    signer_email: fEmail.value.trim(),
+    sig_type: sigMode,
+    sig_data: sigMode === 'draw' ? padCompany.data() : typedName.value.trim(),
+    terms_version: TERMS_VERSION,
+    signed_at: new Date().toISOString()
+    /* server adds: ip, user_agent; generates PDF; sends copy via email */
+  };
+  await submitAgreement(payload);
+  document.getElementById('rSigner').textContent = payload.signer_name;
+  document.getElementById('rTitle').textContent = payload.signer_title;
+  document.getElementById('rWhen').textContent = new Date().toLocaleString();
+  document.getElementById('rVersion').textContent = TERMS_VERSION;
+  document.getElementById('signCard').style.display = 'none';
+  document.getElementById('executed').classList.add('show');
+  document.getElementById('roster').classList.add('show');
+  document.getElementById('executed').scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+
+async function submitAgreement(payload) {
+  /* PROD: POST /api/training/:token/agreement  (Netlify fn -> Neon) */
+  console.log('submitAgreement', payload);
+  return new Promise(r => setTimeout(r, 600));
+}
+
+/* ── Roster ────────────────────────────── */
+const pList = document.getElementById('pList');
+document.getElementById('btnAddP').addEventListener('click', async () => {
+  const name = document.getElementById('pName').value.trim();
+  const email = document.getElementById('pEmail').value.trim();
+  if (name.length < 2 || !/.+@.+\..+/.test(email)) return;
+  const ptk = Math.random().toString(36).slice(2, 10);
+  await addParticipant({ token: TRAINING_TOKEN, name, email, waiver_token: ptk });
+  const row = document.createElement('div');
+  row.className = 'p-row';
+  row.innerHTML =
+    '<div class="p-who"><b>' + esc(name) + '</b><span>' + esc(email) + '</span></div>' +
+    '<span class="p-link">connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + ptk + '</span>' +
+    '<button class="btn mini" type="button" data-copy="' + ptk + '">Copy link</button>' +
+    '<span class="p-status">Awaiting signature</span>';
+  pList.appendChild(row);
+  row.querySelector('[data-copy]').addEventListener('click', e => {
+    navigator.clipboard && navigator.clipboard.writeText(
+      'https://connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + ptk);
+    e.target.textContent = 'Copied';
+    setTimeout(() => e.target.textContent = 'Copy link', 1500);
+  });
+  document.getElementById('pName').value = '';
+  document.getElementById('pEmail').value = '';
+});
+async function addParticipant(p) {
+  /* PROD: POST /api/training/:token/participants
+     Server emails each trainee their unique waiver link. */
+  console.log('addParticipant', p);
+}
+function esc(s) {
+  return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ── Waiver view ───────────────────────── */
+let padWaiver = null;
+document.getElementById('previewWaiver').addEventListener('click', e => {
+  e.preventDefault();
+  document.body.classList.add('show-waiver');
+  window.scrollTo(0, 0);
+  if (!padWaiver) padWaiver = new Pad(document.getElementById('padWaiver'), validateWaiver);
+  else padWaiver.resize();
+});
+document.getElementById('backLink').addEventListener('click', e => {
+  e.preventDefault();
+  document.body.classList.remove('show-waiver');
+});
+
+const wName = document.getElementById('wName');
+const wConsent = document.getElementById('wConsent');
+const btnWaiver = document.getElementById('btnWaiver');
+wName.addEventListener('input', validateWaiver);
+wConsent.addEventListener('change', validateWaiver);
+document.getElementById('clearWaiver').addEventListener('click', () => padWaiver && padWaiver.clear());
+
+function validateWaiver() {
+  btnWaiver.disabled = !(wName.value.trim().length > 1 && wConsent.checked && padWaiver && !padWaiver.empty);
+}
+btnWaiver.addEventListener('click', async () => {
+  btnWaiver.disabled = true;
+  btnWaiver.textContent = 'Signing...';
+  await submitWaiver({
+    waiver_token: 'demo-ptk',
+    name: wName.value.trim(),
+    sig_data: padWaiver.data(),
+    terms_version: TERMS_VERSION,
+    signed_at: new Date().toISOString()
+  });
+  document.getElementById('wrName').textContent = wName.value.trim();
+  document.getElementById('wrWhen').textContent = new Date().toLocaleString();
+  document.getElementById('wExecuted').classList.add('show');
+});
+async function submitWaiver(p) {
+  /* PROD: POST /api/waiver/:ptk/sign  (updates participants row,
+     flips roster status chip, notifies Adam/Regina when all signed) */
+  console.log('submitWaiver', p);
+  return new Promise(r => setTimeout(r, 500));
+}
+
+/* Keep canvases crisp on resize (clears strokes; fine for prototype) */
+let rT;
+window.addEventListener('resize', () => {
+  clearTimeout(rT);
+  rT = setTimeout(() => {
+    padCompany.resize(); padCompany.empty = true; validate();
+    if (padWaiver) { padWaiver.resize(); padWaiver.empty = true; validateWaiver(); }
+  }, 200);
+});
+</script>
+</body>
+</html>
