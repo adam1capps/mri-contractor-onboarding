@@ -39,9 +39,13 @@
 2. Netlify env vars: `SENDGRID_API_KEY` (emails are skipped with a console warning when unset),
    optional `EMAIL_FROM` (default adam@re-dry.com), `NOTIFY_EMAILS` (comma-separated, default
    adam@re-dry.com), `SITE_BASE_URL` (default https://connect.roof-mri.com).
-3. Housekeeping still pending: repo default branch is still
-   `claude/roof-mri-training-agreement-liyg7r`; switch it to `main` in GitHub settings and
-   delete the old branch. (Not possible via the tools available in remote sessions.)
+3. Housekeeping still pending, and it now blocks deploy previews: the repo default branch is
+   still `claude/roof-mri-training-agreement-liyg7r`, and Netlify's production branch matches
+   it, so deploy previews do NOT build for PRs targeting `main` (confirmed on PR #3: no
+   preview, production still serves the old branch). Fix: switch the GitHub default branch to
+   `main`, set the Netlify production branch to `main` (Site configuration > Build & deploy >
+   Branches), then delete the old branch. (Not possible via the tools available in remote
+   sessions.)
 
 ## What the page is
 
