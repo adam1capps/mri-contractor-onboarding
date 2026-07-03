@@ -943,6 +943,59 @@ document.getElementById('clearCompany').addEventListener('click', () => padCompa
 [fName, fTitle, fEmail, typedName].forEach(el => el.addEventListener('input', validate));
 [cEsign, cRead].forEach(el => el.addEventListener('change', validate));
 
+/* ── Draft persistence (this device, per training link) ──
+   Progress survives reloads and accidental Back-button trips: fields,
+   checkboxes, and even a drawn signature are restored from localStorage.
+   The signature itself is only legally executed when Sign is clicked;
+   the server remains the source of truth (IP, user agent, timestamp are
+   captured there at signing time). */
+const DRAFT_KEY = 'rmri:draft:' + TRAINING_TOKEN;
+const SIGNED_KEY = 'rmri:signed:' + TRAINING_TOKEN;
+const ROSTER_KEY = 'rmri:roster:' + TRAINING_TOKEN;
+function store(k, v) {
+  try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
+}
+function loadStored(k) {
+  try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
+}
+function drawDataUrl(pad, dataUrl, done) {
+  const img = new Image();
+  img.onload = () => {
+    pad.ctx.drawImage(img, 0, 0, pad.c.clientWidth, pad.c.clientHeight || 170);
+    pad.empty = false;
+    if (done) done();
+  };
+  img.src = dataUrl;
+}
+let draftTimer = null;
+function saveDraft() {
+  clearTimeout(draftTimer);
+  draftTimer = setTimeout(() => {
+    store(DRAFT_KEY, {
+      n: fName.value, t: fTitle.value, e: fEmail.value,
+      ce: cEsign.checked, cr: cRead.checked,
+      mode: sigMode, typed: typedName.value,
+      sig: padCompany.empty ? null : padCompany.data()
+    });
+  }, 400);
+}
+padCompany.onChange = () => { validate(); saveDraft(); };
+[fName, fTitle, fEmail, typedName].forEach(el => el.addEventListener('input', saveDraft));
+[cEsign, cRead].forEach(el => el.addEventListener('change', saveDraft));
+(function restoreDraft() {
+  const d = loadStored(DRAFT_KEY);
+  if (!d) return;
+  fName.value = d.n || '';
+  fTitle.value = d.t || '';
+  fEmail.value = d.e || '';
+  cEsign.checked = !!d.ce;
+  cRead.checked = !!d.cr;
+  typedName.value = d.typed || '';
+  if (d.mode === 'type') setMode('type');
+  if (d.sig) drawDataUrl(padCompany, d.sig, validate);
+  validate();
+})();
+
 /* Inline email feedback on blur; clears as soon as the value is fixed */
 const fEmailError = document.getElementById('fEmailError');
 fEmail.addEventListener('blur', () => {
@@ -984,6 +1037,11 @@ btnSign.addEventListener('click', async () => {
     /* server adds: ip, user_agent; generates PDF; sends copy via email */
   };
   const result = await submitAgreement(payload);
+  store(DRAFT_KEY, null);
+  store(SIGNED_KEY, {
+    signer: payload.signer_name, title: payload.signer_title,
+    when: new Date().toLocaleString(), version: TERMS_VERSION
+  });
   document.getElementById('rSigner').textContent = payload.signer_name;
   document.getElementById('rTitle').textContent = payload.signer_title;
   document.getElementById('rWhen').textContent = new Date().toLocaleString();
@@ -1020,7 +1078,7 @@ async function submitAgreement(payload) {
 
 /* ── Roster ────────────────────────────── */
 const pList = document.getElementById('pList');
-let roster = []; /* {name, email, waiver_token, signed} */
+let roster = loadStored(ROSTER_KEY) || []; /* {name, email, waiver_token, signed} */
 let rosterTimer = null;
 
 function rosterRow(p) {
@@ -1050,6 +1108,7 @@ async function loadRoster() {
     const res = await fetch('/api/training/' + TRAINING_TOKEN + '/participants');
     if (!res.ok) throw new Error('HTTP ' + res.status);
     roster = (await res.json()).participants;
+    store(ROSTER_KEY, roster);
     renderRoster();
   } catch (err) { /* demo mode */ }
 }
@@ -1071,6 +1130,7 @@ document.getElementById('btnAddP').addEventListener('click', async () => {
   rosterError.hidden = !(nameBad || emailBad);
   if (nameBad || emailBad) return;
   roster.push(await addParticipant({ name, email }));
+  store(ROSTER_KEY, roster);
   renderRoster();
   pName.value = '';
   pEmail.value = '';
@@ -1099,29 +1159,85 @@ function esc(s) {
   return s.replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
+/* Reload after signing (demo or before hydration): restore executed state */
+(function restoreSigned() {
+  const s = loadStored(SIGNED_KEY);
+  if (!s) return;
+  document.getElementById('rSigner').textContent = s.signer;
+  document.getElementById('rTitle').textContent = s.title;
+  document.getElementById('rWhen').textContent = s.when;
+  document.getElementById('rVersion').textContent = s.version;
+  document.getElementById('signCard').style.display = 'none';
+  document.getElementById('executed').classList.add('show');
+  document.getElementById('roster').classList.add('show');
+  if (roster.length) renderRoster();
+  startRosterPolling();
+})();
+
 /* ── Waiver view ───────────────────────── */
 let padWaiver = null;
-document.getElementById('previewWaiver').addEventListener('click', e => {
-  e.preventDefault();
+const WDRAFT_KEY = 'rmri:wdraft:' + (WAIVER_PTK || 'demo-ptk');
+const WSIGNED_KEY = 'rmri:wsigned:' + (WAIVER_PTK || 'demo-ptk');
+
+function openWaiverView() {
   document.body.classList.add('show-waiver');
   window.scrollTo(0, 0);
-  if (!padWaiver) padWaiver = new Pad(document.getElementById('padWaiver'), validateWaiver);
-  else padWaiver.resize();
+  if (!padWaiver) {
+    padWaiver = new Pad(document.getElementById('padWaiver'), () => { validateWaiver(); saveWaiverDraft(); });
+    restoreWaiverState();
+  } else {
+    padWaiver.resize();
+  }
+}
+/* The preview navigates via #waiver so the browser Back button returns to
+   the training page (with all progress intact) instead of leaving it. */
+document.getElementById('previewWaiver').addEventListener('click', e => {
+  e.preventDefault();
+  location.hash = 'waiver';
 });
 document.getElementById('backLink').addEventListener('click', e => {
   e.preventDefault();
-  document.body.classList.remove('show-waiver');
+  if (location.hash === '#waiver') history.back();
+  else document.body.classList.remove('show-waiver');
+});
+window.addEventListener('hashchange', () => {
+  if (location.hash === '#waiver') openWaiverView();
+  else if (!WAIVER_PTK) document.body.classList.remove('show-waiver');
 });
 
 const wName = document.getElementById('wName');
 const wConsent = document.getElementById('wConsent');
 const btnWaiver = document.getElementById('btnWaiver');
-wName.addEventListener('input', validateWaiver);
-wConsent.addEventListener('change', validateWaiver);
+wName.addEventListener('input', () => { validateWaiver(); saveWaiverDraft(); });
+wConsent.addEventListener('change', () => { validateWaiver(); saveWaiverDraft(); });
 document.getElementById('clearWaiver').addEventListener('click', () => padWaiver && padWaiver.clear());
 
 function validateWaiver() {
   btnWaiver.disabled = !(wName.value.trim().length > 1 && wConsent.checked && padWaiver && !padWaiver.empty);
+}
+let wDraftTimer = null;
+function saveWaiverDraft() {
+  clearTimeout(wDraftTimer);
+  wDraftTimer = setTimeout(() => {
+    store(WDRAFT_KEY, {
+      name: wName.value, c: wConsent.checked,
+      sig: padWaiver && !padWaiver.empty ? padWaiver.data() : null
+    });
+  }, 400);
+}
+function restoreWaiverState() {
+  const signed = loadStored(WSIGNED_KEY);
+  if (signed) {
+    document.getElementById('wrName').textContent = signed.name;
+    document.getElementById('wrWhen').textContent = signed.when;
+    document.getElementById('wExecuted').classList.add('show');
+  }
+  const d = loadStored(WDRAFT_KEY);
+  if (!d) return;
+  wName.value = d.name || '';
+  wConsent.checked = !!d.c;
+  if (d.sig && padWaiver) drawDataUrl(padWaiver, d.sig, validateWaiver);
+  validateWaiver();
 }
 btnWaiver.addEventListener('click', async () => {
   btnWaiver.disabled = true;
@@ -1133,6 +1249,8 @@ btnWaiver.addEventListener('click', async () => {
     terms_version: TERMS_VERSION,
     signed_at: new Date().toISOString()
   });
+  store(WDRAFT_KEY, null);
+  store(WSIGNED_KEY, { name: wName.value.trim(), when: new Date().toLocaleString() });
   document.getElementById('wrName').textContent = wName.value.trim();
   document.getElementById('wrWhen').textContent = new Date().toLocaleString();
   document.getElementById('wExecuted').classList.add('show');
@@ -1156,11 +1274,8 @@ async function submitWaiver(p) {
 }
 
 /* Arriving on a waiver link (/training/{token}/w/{ptk} or ?ptk=...) opens
-   the waiver view directly. */
-if (WAIVER_PTK) {
-  document.body.classList.add('show-waiver');
-  padWaiver = new Pad(document.getElementById('padWaiver'), validateWaiver);
-}
+   the waiver view directly; #waiver restores the preview after a reload. */
+if (WAIVER_PTK || location.hash === '#waiver') openWaiverView();
 
 /* ── Server hydration ──────────────────── */
 function applyTraining(t) {
@@ -1183,7 +1298,7 @@ function applyTraining(t) {
   document.getElementById('fCompany').value = t.company;
   document.getElementById('waiverMeta').textContent =
     (t.company + ' · Training date ' + dateLabel + ' · ReDry LLC').toUpperCase();
-  if (t.agreement_signed) {
+  if (t.agreement_signed && !document.getElementById('executed').classList.contains('show')) {
     const card = document.getElementById('signCard');
     card.style.display = 'none';
     const done = document.createElement('div');
@@ -1219,13 +1334,19 @@ if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'Intersect
   });
 }
 
-/* Keep canvases crisp on resize (clears strokes; fine for prototype) */
+/* Keep canvases crisp on resize; strokes are redrawn from the saved draft */
 let rT;
 window.addEventListener('resize', () => {
   clearTimeout(rT);
   rT = setTimeout(() => {
-    padCompany.resize(); padCompany.empty = true; validate();
-    if (padWaiver) { padWaiver.resize(); padWaiver.empty = true; validateWaiver(); }
+    padCompany.resize(); padCompany.empty = true;
+    const d = loadStored(DRAFT_KEY);
+    if (d && d.sig) drawDataUrl(padCompany, d.sig, validate); else validate();
+    if (padWaiver) {
+      padWaiver.resize(); padWaiver.empty = true;
+      const w = loadStored(WDRAFT_KEY);
+      if (w && w.sig) drawDataUrl(padWaiver, w.sig, validateWaiver); else validateWaiver();
+    }
   }, 200);
 });
 </script>
