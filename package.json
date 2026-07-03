@@ -4,6 +4,7 @@
   "type": "module",
   "description": "Roof MRI contractor onboarding: training prep + agreement execution page, Netlify functions, Neon",
   "dependencies": {
+    "@clerk/backend": "^1.24.0",
     "@neondatabase/serverless": "^0.10.4",
     "pdf-lib": "^1.17.1"
   }

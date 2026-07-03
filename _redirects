@@ -1,3 +1,7 @@
-# Prototype convenience: land the bare preview URL on the training page.
-# Prod routing (connect.roof-mri.com/training/{token}) will replace this.
+# Land the bare site URL on the training page (demo render).
 /  /training/  302
+
+# Personalized training pages: the page reads the token (and waiver token)
+# from the path and hydrates from GET /api/training/:token.
+/training/*/w/*  /training/index.html  200
+/training/*      /training/index.html  200

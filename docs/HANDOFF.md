@@ -62,12 +62,31 @@ One personalized URL per booked training in the Roof MRI Connect stack (target:
 Demo data is hardcoded (Summit Commercial Roofing, Aug 13 2026, trainer Adam Capps,
 Professional package, `TRAINING_TOKEN = "demo-token"`) and will be injected server-side in prod.
 
+## Admin console (added Jul 2026)
+
+- `/admin/` is Regina's console: create a training per contractor (company, contact, date,
+  package, trainer, meet location, onsite/nashville format with different form defaults per
+  format), optionally email the personalized link, and see every training's agreement/waiver
+  status with copyable links. Built on the Connect design system, vanilla JS.
+- Auth: Clerk (Google sign-in), enforced server-side in `netlify/lib/adminauth.mjs`; only
+  emails on `ADMIN_EMAIL_DOMAINS` (default `re-dry.com`) pass. Frontend loads ClerkJS v5 from
+  the instance's frontend API; the session token goes to the API as a Bearer header.
+- Endpoints: `GET /api/admin/config` (publishable key, public), `GET/POST /api/admin/trainings`
+  (Clerk-gated). `GET /api/training/:token` is public hydration data for the training page.
+- **Clerk setup still needed (Adam, one time)**: create a Clerk app, enable ONLY Google as a
+  sign-in option, add the site URL to allowed origins, then set Netlify env vars
+  `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` (optional `ADMIN_EMAIL_DOMAINS`). Until then
+  `/admin/` shows a friendly "Almost ready" setup card.
+- Personalized routing is live: `_redirects` rewrites `/training/{token}` and
+  `/training/{token}/w/{ptk}` to the page, which reads the token from the path and hydrates
+  from the API (company, date, meet, trainer, package, format render, agreement-signed state).
+  `demo-token` still renders the built-in demo; unknown tokens go to the 404 page.
+
 ## Not built yet (natural next steps)
 
-- **Prod routing + server-side injection**: `/training/{token}` should render the page with real
-  training data (company, date, format, token) instead of the hardcoded demo constants, and
-  `/training/{token}/w/{ptk}` should resolve to the waiver view (an edge function or a render
-  function templating `training/index.html`). The `?ptk=` query param is a stand-in.
+- **Waiver personalization**: the waiver view shows company/date from the training, but does
+  not yet look up the participant by `ptk` to pre-fill their name or block re-signing client
+  side (the API is already idempotent server-side).
 - **Durable PDF storage**: `agreements.pdf_url` is reserved; executed PDFs currently exist only
   as email attachments (Netlify Blobs or S3, then backfill the column).
 - **Nashville copy sign-off**: the Nashville render's travel/hotel and adjusted cancellation

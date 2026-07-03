@@ -403,12 +403,12 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 
   <section class="meta-card">
     <div class="eyebrow">Roof MRI Certification Training</div>
-    <h1>Summit Commercial Roofing</h1>
+    <h1 id="heroCompany">Summit Commercial Roofing</h1>
     <div class="meta-grid" id="metaGrid">
-      <div class="cell"><span class="k">Training Date</span><span class="v">Thu, Aug 13, 2026</span></div>
+      <div class="cell"><span class="k">Training Date</span><span class="v" id="metaDate">Thu, Aug 13, 2026</span></div>
       <div class="cell"><span class="k">Meet</span><span class="v" id="metaMeet">8:00 AM, Summit's Office</span></div>
-      <div class="cell"><span class="k">Trainer</span><span class="v">Adam Capps</span></div>
-      <div class="cell"><span class="k">Package</span><span class="v">Professional</span></div>
+      <div class="cell"><span class="k">Trainer</span><span class="v" id="metaTrainer">Adam Capps</span></div>
+      <div class="cell"><span class="k">Package</span><span class="v" id="metaPackage">Professional</span></div>
     </div>
     <p class="lede">You're officially on the path to Roof MRI Certification. Done right, this training pays for itself immediately by delivering real value to your clients. Everything you need is on this page: how to prepare, how the day runs, what happens after, and the agreement that makes it official.</p>
   </section>
@@ -663,7 +663,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     <!-- Signing card -->
     <div class="sign-card" id="signCard">
       <h3>Execute the agreement</h3>
-      <p class="hint">Signed by an owner or officer authorized to bind Summit Commercial Roofing.</p>
+      <p class="hint" id="signHint">Signed by an owner or officer authorized to bind Summit Commercial Roofing.</p>
 
       <div class="fields">
         <div class="field"><label for="fCompany">Company</label><input id="fCompany" type="text" value="Summit Commercial Roofing" readonly></div>
@@ -752,7 +752,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     <div class="waiver-card">
       <div class="eyebrow">Roof MRI Field Training</div>
       <h1>Participant Waiver and Release</h1>
-      <p class="waiver-meta">SUMMIT COMMERCIAL ROOFING · TRAINING DATE AUG 13, 2026 · REDRY LLC</p>
+      <p class="waiver-meta" id="waiverMeta">SUMMIT COMMERCIAL ROOFING · TRAINING DATE AUG 13, 2026 · REDRY LLC</p>
 
       <div class="clauses">
         <div class="clause"><span class="n">1</span><p><b>Assumption of risk.</b> I understand that rooftop training involves inherent risks, including falls, serious injury, and death. I am participating voluntarily and I accept those risks.</p></div>
@@ -814,14 +814,18 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 /* Terms version travels with every signature so you always know
    exactly which text a signer agreed to. Bump when terms change. */
 const TERMS_VERSION = "2026-07-03.1";
-const TRAINING_TOKEN = "demo-token"; /* injected server-side in prod */
-/* Prod injects trainings.format server-side; ?format=nashville previews it.
-   Prod waiver URLs are /training/{token}/w/{ptk}; ?ptk= stands in for now. */
-const TRAINING_FORMAT = new URLSearchParams(location.search).get('format') === 'nashville' ? 'nashville' : 'onsite';
-const WAIVER_PTK = new URLSearchParams(location.search).get('ptk');
+/* Token and waiver token come from the URL: /training/{token} and
+   /training/{token}/w/{ptk} (Netlify rewrites in _redirects), with ?t= and
+   ?ptk= fallbacks for local previews. demo-token renders the built-in demo;
+   real tokens hydrate from GET /api/training/:token below. */
+const pathMatch = location.pathname.match(/^\/training\/([A-Za-z0-9][A-Za-z0-9-]*)(?:\/w\/([A-Za-z0-9][A-Za-z0-9-]*))?\/?$/);
+const qs = new URLSearchParams(location.search);
+const TRAINING_TOKEN = (pathMatch && pathMatch[1]) || qs.get('t') || 'demo-token';
+const WAIVER_PTK = (pathMatch && pathMatch[2]) || qs.get('ptk');
+let TRAINING_FORMAT = qs.get('format') === 'nashville' ? 'nashville' : 'onsite';
 
 /* ── Nashville format render ───────────── */
-if (TRAINING_FORMAT === 'nashville') {
+function renderNashville() {
   /* Street address of the ReDry facility gets injected server-side. */
   document.getElementById('metaMeet').textContent = '8:00 AM, ReDry Training Facility';
   const loc = document.createElement('div');
@@ -845,6 +849,7 @@ if (TRAINING_FORMAT === 'nashville') {
   document.getElementById('policyNote').textContent =
     'This policy comes from experience. Clear communication keeps everything running smoothly. For Nashville trainings, travel and lodging are booked and paid by you and are not refunded by ReDry if a session is rescheduled.';
 }
+if (TRAINING_FORMAT === 'nashville') renderNashville();
 
 /* ── Accordion ─────────────────────────── */
 document.querySelectorAll('.acc-btn').forEach(btn => {
@@ -1019,16 +1024,16 @@ let roster = []; /* {name, email, waiver_token, signed} */
 let rosterTimer = null;
 
 function rosterRow(p) {
+  const waiverUrl = location.origin + '/training/' + TRAINING_TOKEN + '/w/' + p.waiver_token;
   const row = document.createElement('div');
   row.className = 'p-row';
   row.innerHTML =
     '<div class="p-who"><b>' + esc(p.name) + '</b><span>' + esc(p.email) + '</span></div>' +
-    '<span class="p-link">connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + esc(p.waiver_token) + '</span>' +
+    '<span class="p-link">' + esc(waiverUrl.replace(/^https?:\/\//, '')) + '</span>' +
     '<button class="btn mini" type="button">Copy link</button>' +
     '<span class="p-status' + (p.signed ? ' signed' : '') + '">' + (p.signed ? 'Signed' : 'Awaiting signature') + '</span>';
   row.querySelector('button').addEventListener('click', e => {
-    navigator.clipboard && navigator.clipboard.writeText(
-      'https://connect.roof-mri.com/training/' + TRAINING_TOKEN + '/w/' + p.waiver_token);
+    navigator.clipboard && navigator.clipboard.writeText(waiverUrl);
     e.target.textContent = 'Copied';
     setTimeout(() => e.target.textContent = 'Copy link', 1500);
   });
@@ -1150,11 +1155,57 @@ async function submitWaiver(p) {
   }
 }
 
-/* Arriving on a waiver link (?ptk=...) opens the waiver view directly. */
+/* Arriving on a waiver link (/training/{token}/w/{ptk} or ?ptk=...) opens
+   the waiver view directly. */
 if (WAIVER_PTK) {
   document.body.classList.add('show-waiver');
   padWaiver = new Pad(document.getElementById('padWaiver'), validateWaiver);
 }
+
+/* ── Server hydration ──────────────────── */
+function applyTraining(t) {
+  if (t.format === 'nashville' && TRAINING_FORMAT !== 'nashville') {
+    TRAINING_FORMAT = 'nashville';
+    renderNashville();
+  }
+  const date = String(t.training_date || '').slice(0, 10);
+  const dateLabel = date
+    ? new Date(date + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })
+    : '';
+  document.title = 'Your Roof MRI Certification Training | ' + t.company;
+  document.getElementById('heroCompany').textContent = t.company;
+  if (dateLabel) document.getElementById('metaDate').textContent = dateLabel;
+  if (t.meet_location) document.getElementById('metaMeet').textContent = t.meet_location;
+  if (t.trainer) document.getElementById('metaTrainer').textContent = t.trainer;
+  if (t.package) document.getElementById('metaPackage').textContent = t.package;
+  document.getElementById('signHint').textContent =
+    'Signed by an owner or officer authorized to bind ' + t.company + '.';
+  document.getElementById('fCompany').value = t.company;
+  document.getElementById('waiverMeta').textContent =
+    (t.company + ' · Training date ' + dateLabel + ' · ReDry LLC').toUpperCase();
+  if (t.agreement_signed) {
+    const card = document.getElementById('signCard');
+    card.style.display = 'none';
+    const done = document.createElement('div');
+    done.className = 'plain';
+    done.innerHTML = '<b>Agreement executed.</b> Add your crew below so every trainee can sign their field waiver before training day.';
+    card.after(done);
+    document.getElementById('roster').classList.add('show');
+    startRosterPolling();
+  }
+}
+async function hydrateTraining() {
+  if (TRAINING_TOKEN === 'demo-token') return; /* built-in demo content */
+  try {
+    const res = await fetch('/api/training/' + TRAINING_TOKEN);
+    if (res.status === 404) { location.replace('/404.html'); return; }
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    applyTraining(await res.json());
+  } catch (err) {
+    console.warn('hydrateTraining failed, showing demo content', err);
+  }
+}
+hydrateTraining();
 
 /* Staggered scroll-entry reveals. Classes are added here so users without
    JS (and reduced-motion users) always see the page fully rendered. */

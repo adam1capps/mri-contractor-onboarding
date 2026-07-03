@@ -4,7 +4,9 @@ import { sendEmail } from '../lib/email.mjs';
 const EMAIL_RE = /.+@.+\..+/;
 
 function siteBase() {
-  return (process.env.SITE_BASE_URL || 'https://connect.roof-mri.com').replace(/\/$/, '');
+  /* Set SITE_BASE_URL once connect.roof-mri.com points at this app. */
+  return (process.env.SITE_BASE_URL || process.env.URL || 'https://contractor-onboarding.netlify.app')
+    .replace(/\/$/, '');
 }
 
 export default async (req, context) => {
