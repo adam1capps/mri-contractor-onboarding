@@ -81,7 +81,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 <link rel="icon" type="image/png" href="/roof-mri-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <style>
   /* Design tokens mirrored from the Roof MRI Connect app stylesheet
      (connect.roof-mri.com). Keep in sync with the app when it changes. */
@@ -146,13 +146,14 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   header.site{background:var(--navy)}
   .site-inner{display:flex;align-items:center;justify-content:space-between;padding:15px 0;gap:16px;flex-wrap:wrap}
   .wordmark{display:flex;align-items:center;gap:10px;text-decoration:none}
-  /* Logo mark colors come from the actual logo asset, not the UI tokens */
-  .mark-squares{display:flex;gap:3px}
-  .mark-squares i{width:10px;height:10px;display:block;border-radius:2px}
+  /* Brand lockup: geometry and colors match the actual logo asset
+     (Montserrat Black wordmark; squares gap ~19% of width, near-sharp corners) */
+  .mark-squares{display:flex;gap:2px}
+  .mark-squares i{width:11px;height:11px;display:block;border-radius:1.5px}
   .mark-squares i:nth-child(1){background:#00BF63}
   .mark-squares i:nth-child(2){background:#FFDE59}
   .mark-squares i:nth-child(3){background:#F81414}
-  .wordmark b{font-size:16px;font-weight:800;letter-spacing:.08em;color:var(--white)}
+  .wordmark b{font-family:Montserrat,var(--font);font-size:16.5px;font-weight:900;letter-spacing:.01em;color:var(--white)}
   .tagline{font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--green);text-transform:uppercase;background:var(--green-wash-2);border-radius:100px;padding:4px 12px}
   @media (max-width:560px){.tagline{display:none}}
 
