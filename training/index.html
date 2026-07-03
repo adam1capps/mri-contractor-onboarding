@@ -74,6 +74,11 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Your Roof MRI Certification Training | Summit Commercial Roofing</title>
+<meta name="description" content="Your Roof MRI Certification Training page: how to prepare, how the day runs, what happens after, and the Training Agreement, ready to sign.">
+<meta property="og:title" content="Your Roof MRI Certification Training">
+<meta property="og:description" content="Training prep, the day-of schedule, and agreement execution for Roof MRI certification.">
+<meta property="og:type" content="website">
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='11.5' width='9' height='9' rx='2' fill='%2300BD70'/%3E%3Crect x='11.5' y='11.5' width='9' height='9' rx='2' fill='%23F2C94C'/%3E%3Crect x='22' y='11.5' width='9' height='9' rx='2' fill='%23EB5757'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -129,6 +134,13 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     -webkit-font-smoothing:antialiased;
   }
   .wrap{max-width:880px;margin:0 auto;padding:0 22px}
+  .skip{position:absolute;left:-9999px}
+  .skip:focus{position:fixed;left:14px;top:14px;z-index:20;background:var(--navy);color:var(--white);font-size:13px;font-weight:700;padding:10px 18px;border-radius:8px;outline:2px solid var(--green);outline-offset:2px;text-decoration:none}
+
+  /* Scroll-entry reveals (class added by JS; no-JS stays visible) */
+  .reveal{opacity:0;transform:translateY(14px);transition:opacity .5s ease,transform .5s ease}
+  .reveal.in{opacity:1;transform:none}
+  @media (prefers-reduced-motion: reduce){.reveal{opacity:1;transform:none}}
 
   /* ── Topbar ─────────────────────────────── */
   header.site{background:var(--navy)}
@@ -144,13 +156,19 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   @media (max-width:560px){.tagline{display:none}}
 
   /* ── Hero card ──────────────────────────── */
-  .meta-card{background:var(--navy);border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:40px 40px 36px;margin:32px 0 8px}
+  .meta-card{
+    background:
+      radial-gradient(90% 130% at 88% -15%, rgba(0,189,112,.14), transparent 60%),
+      radial-gradient(120% 150% at 8% 115%, #26355f, transparent 62%),
+      var(--navy);
+    border-radius:var(--radius-lg);box-shadow:var(--shadow-lg);padding:40px 40px 36px;margin:32px 0 8px;
+  }
   .eyebrow{display:inline-block;font-size:10px;font-weight:800;letter-spacing:.8px;text-transform:uppercase;color:var(--green);background:#00bd7024;border-radius:100px;padding:5px 14px;margin-bottom:18px}
   .meta-card h1{font-size:clamp(27px,4.6vw,40px);font-weight:800;letter-spacing:-.8px;line-height:1.12;color:var(--white);margin-bottom:24px;text-wrap:balance}
   .meta-grid{display:flex;flex-wrap:wrap;gap:10px}
   .meta-grid .cell{background:#ffffff14;border:1px solid rgba(255,255,255,.12);border-radius:8px;padding:9px 16px;min-width:0}
   .meta-grid .k{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:#ffffff8c;display:block;margin-bottom:1px}
-  .meta-grid .v{font-weight:600;color:var(--white);font-size:13.5px}
+  .meta-grid .v{font-weight:600;color:var(--white);font-size:13.5px;font-variant-numeric:tabular-nums}
   .lede{margin:24px 0 0;color:#ffffffd9;font-size:14.5px;max-width:64ch}
 
   /* ── Section cards ──────────────────────── */
@@ -163,8 +181,12 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     background:var(--green-wash);border:1px solid var(--green-border);width:32px;height:32px;border-radius:8px;
     display:flex;align-items:center;justify-content:center;flex:none;
   }
-  .sec-head h2{font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--navy);line-height:1.2}
+  .sec-head h2{font-size:22px;font-weight:800;letter-spacing:-.4px;color:var(--navy);line-height:1.2;text-wrap:balance}
   .sec-sub{color:var(--gray-500);margin-bottom:24px;font-size:14.5px}
+  .prep-item h3,.t-row h3,.tier h3,.after-item h3{text-wrap:balance}
+  .prep-item p,.t-row p,.tier p,.acc-body-inner p,.clause p,.lede{text-wrap:pretty}
+  .prep-item p{max-width:68ch}
+  .acc-body-inner{max-width:70ch}
 
   /* Prep checklist */
   .prep{display:flex;flex-direction:column;gap:0;border-top:1px solid var(--gray-100)}
@@ -248,6 +270,10 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   }
   .field input:focus{border-color:var(--green);box-shadow:0 0 0 3px var(--green-wash)}
   .field input[readonly]{background:var(--gray-100);color:var(--gray-500)}
+  .field input.invalid, .roster-add input.invalid{border-color:var(--red);box-shadow:0 0 0 3px #eb57571a}
+  .field-error{display:block;font-size:12px;font-weight:600;color:var(--red);margin-top:5px}
+  .form-error{font-size:12.5px;font-weight:600;color:var(--red);margin:2px 0 10px}
+  [hidden]{display:none!important}
   .consents{display:flex;flex-direction:column;gap:12px;margin:4px 0 22px}
   .consent{display:flex;gap:11px;align-items:flex-start;font-size:13.5px;color:var(--gray-600);cursor:pointer}
   .consent input{margin-top:3px;width:16px;height:16px;accent-color:var(--green);flex:none}
@@ -260,6 +286,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     transition:all .15s ease;
   }
   .sig-tab:hover{border-color:var(--gray-300)}
+  .sig-tab:active{transform:scale(.97)}
   .sig-tab.active{border-color:var(--green);color:var(--green);background:var(--green-wash)}
   .pad-shell{border:1.5px solid var(--gray-300);border-radius:12px;background:var(--white);position:relative}
   .pad-shell canvas{display:block;width:100%;height:170px;border-radius:12px;touch-action:none;cursor:crosshair}
@@ -286,6 +313,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     transition:all .2s;
   }
   .btn:hover:not(:disabled){background:var(--navy-hover)}
+  .btn:active:not(:disabled){transform:translateY(1px) scale(.985)}
   .btn:focus-visible{outline:2px solid var(--green);outline-offset:2px}
   .btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important;box-shadow:none!important}
   .btn.go{background:var(--green)}
@@ -304,7 +332,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   .exec-head h3{font-size:17px;font-weight:800;letter-spacing:-.3px;color:var(--navy)}
   .exec-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;border-top:1px solid #A7F3D0;padding-top:16px}
   .exec-grid .k{font-size:9.5px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--gray-500);display:block;margin-bottom:2px}
-  .exec-grid .v{font-size:13.5px;font-weight:700;color:var(--navy);word-break:break-word}
+  .exec-grid .v{font-size:13.5px;font-weight:700;color:var(--navy);word-break:break-word;font-variant-numeric:tabular-nums}
   .exec-mail{margin-top:16px;font-size:13.5px;color:var(--gray-600)}
 
   /* Roster */
@@ -349,14 +377,17 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   .foot-brand{display:flex;align-items:center;gap:10px}
   .foot-brand b{color:var(--navy);font-weight:800;letter-spacing:.08em;font-size:14px}
   .foot-tag{font-size:12px;color:var(--gray-400);margin-top:4px}
+  .foot-tag a{color:var(--gray-500);text-decoration:underline}
+  .foot-tag a:hover{color:var(--navy)}
   .foot-legal{font-size:11px;color:var(--gray-400);max-width:420px;line-height:1.5}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to content</a>
 
 <header class="site">
   <div class="wrap site-inner">
-    <a class="wordmark" href="#">
+    <a class="wordmark" href="https://roof-mri.com">
       <span class="mark-squares"><i></i><i></i><i></i></span>
       <b>ROOF MRI</b>
     </a>
@@ -366,7 +397,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 
 <!-- ════════════════ COMPANY VIEW ════════════════ -->
 <div id="companyView">
-<main class="wrap">
+<main class="wrap" id="main">
 
   <section class="meta-card">
     <div class="eyebrow">Roof MRI Certification Training</div>
@@ -636,7 +667,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
         <div class="field"><label for="fCompany">Company</label><input id="fCompany" type="text" value="Summit Commercial Roofing" readonly></div>
         <div class="field"><label for="fName">Your full legal name</label><input id="fName" type="text" placeholder="First Last" autocomplete="name"></div>
         <div class="field"><label for="fTitle">Title</label><input id="fTitle" type="text" placeholder="Owner, President, VP..."></div>
-        <div class="field"><label for="fEmail">Email</label><input id="fEmail" type="email" placeholder="you@company.com" autocomplete="email"></div>
+        <div class="field"><label for="fEmail">Email</label><input id="fEmail" type="email" placeholder="you@company.com" autocomplete="email"><span class="field-error" id="fEmailError" hidden>Enter a valid email address, like you@company.com.</span></div>
       </div>
 
       <div class="consents">
@@ -703,6 +734,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
       <input id="pEmail" type="email" placeholder="Trainee email">
       <button class="btn mini" id="btnAddP" type="button">Add trainee</button>
     </div>
+    <p class="form-error" id="rosterError" hidden>Enter the trainee's full name and a valid email address.</p>
     <p class="roster-rule">Field rule on training day: no signed waiver, no roof.</p>
     <div id="pList"></div>
     <a class="preview-link" href="#" id="previewWaiver">Preview the waiver your crew will sign →</a>
@@ -771,7 +803,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
         <span class="mark-squares"><i></i><i></i><i></i></span>
         <b>ROOF MRI</b>
       </div>
-      <p class="foot-tag">Advancing the Science of Moisture Detection · roof-mri.com</p>
+      <p class="foot-tag">Advancing the Science of Moisture Detection · <a href="https://roof-mri.com">roof-mri.com</a></p>
     </div>
     <p class="foot-legal">'Roof MRI™' is a trademark of ReDry®. Any references to our patent-pending methodologies or other proprietary processes remain the exclusive property of ReDry and may not be shared, reproduced, or used without express written permission.</p>
   </div>
@@ -905,6 +937,17 @@ document.getElementById('clearCompany').addEventListener('click', () => padCompa
 [fName, fTitle, fEmail, typedName].forEach(el => el.addEventListener('input', validate));
 [cEsign, cRead].forEach(el => el.addEventListener('change', validate));
 
+/* Inline email feedback on blur; clears as soon as the value is fixed */
+const fEmailError = document.getElementById('fEmailError');
+fEmail.addEventListener('blur', () => {
+  const bad = fEmail.value.trim() !== '' && !/.+@.+\..+/.test(fEmail.value);
+  fEmail.classList.toggle('invalid', bad);
+  fEmailError.hidden = !bad;
+});
+fEmail.addEventListener('input', () => {
+  if (/.+@.+\..+/.test(fEmail.value)) { fEmail.classList.remove('invalid'); fEmailError.hidden = true; }
+});
+
 function hasSignature() {
   return sigMode === 'draw' ? !padCompany.empty : typedName.value.trim().length > 1;
 }
@@ -1010,14 +1053,26 @@ function startRosterPolling() {
 }
 
 document.getElementById('btnAddP').addEventListener('click', async () => {
-  const name = document.getElementById('pName').value.trim();
-  const email = document.getElementById('pEmail').value.trim();
-  if (name.length < 2 || !/.+@.+\..+/.test(email)) return;
+  const pName = document.getElementById('pName');
+  const pEmail = document.getElementById('pEmail');
+  const rosterError = document.getElementById('rosterError');
+  const name = pName.value.trim();
+  const email = pEmail.value.trim();
+  const nameBad = name.length < 2;
+  const emailBad = !/.+@.+\..+/.test(email);
+  pName.classList.toggle('invalid', nameBad);
+  pEmail.classList.toggle('invalid', emailBad);
+  rosterError.hidden = !(nameBad || emailBad);
+  if (nameBad || emailBad) return;
   roster.push(await addParticipant({ name, email }));
   renderRoster();
-  document.getElementById('pName').value = '';
-  document.getElementById('pEmail').value = '';
+  pName.value = '';
+  pEmail.value = '';
 });
+['pName', 'pEmail'].forEach(id => document.getElementById(id).addEventListener('input', e => {
+  e.target.classList.remove('invalid');
+  document.getElementById('rosterError').hidden = true;
+}));
 async function addParticipant(p) {
   /* POST /api/training/:token/participants. The server generates the waiver
      token and emails the trainee their unique signing link. */
@@ -1098,6 +1153,18 @@ async function submitWaiver(p) {
 if (WAIVER_PTK) {
   document.body.classList.add('show-waiver');
   padWaiver = new Pad(document.getElementById('padWaiver'), validateWaiver);
+}
+
+/* Staggered scroll-entry reveals. Classes are added here so users without
+   JS (and reduced-motion users) always see the page fully rendered. */
+if (!window.matchMedia('(prefers-reduced-motion: reduce)').matches && 'IntersectionObserver' in window) {
+  const io = new IntersectionObserver(entries => entries.forEach(en => {
+    if (en.isIntersecting) { en.target.classList.add('in'); io.unobserve(en.target); }
+  }), { rootMargin: '0px 0px -8% 0px' });
+  document.querySelectorAll('#companyView .meta-card, #companyView section.block, #roster').forEach(el => {
+    el.classList.add('reveal');
+    io.observe(el);
+  });
 }
 
 /* Keep canvases crisp on resize (clears strokes; fine for prototype) */
