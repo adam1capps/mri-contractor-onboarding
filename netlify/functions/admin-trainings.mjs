@@ -6,7 +6,7 @@ const EMAIL_RE = /.+@.+\..+/;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
 function siteBase() {
-  return (process.env.SITE_BASE_URL || process.env.URL || 'https://contractor-onboarding.netlify.app')
+  return (process.env.SITE_BASE_URL || process.env.URL || 'https://onboarding.roof-mri.com')
     .replace(/\/$/, '');
 }
 

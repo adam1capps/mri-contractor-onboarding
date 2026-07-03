@@ -6,6 +6,11 @@ import { sendEmail, notifyRecipients } from '../lib/email.mjs';
 const EMAIL_RE = /.+@.+\..+/;
 const MAX_SIG_BYTES = 2_000_000;
 
+function siteBase() {
+  return (process.env.SITE_BASE_URL || process.env.URL || 'https://onboarding.roof-mri.com')
+    .replace(/\/$/, '');
+}
+
 export default async (req, context) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   const sql = getSql();
@@ -69,6 +74,7 @@ export default async (req, context) => {
     const dateLabel = training.training_date
       ? String(training.training_date).slice(0, 10)
       : 'your scheduled date';
+    const pageLink = `${siteBase()}/training/${token}`;
     emailed = await sendEmail({
       to: signerEmail,
       subject: `Your executed Roof MRI Training Agreement (${training.company})`,
@@ -77,8 +83,10 @@ export default async (req, context) => {
         `Your Roof MRI Training Agreement for ${training.company} is executed. ` +
         `A PDF copy is attached for your records.\n\n` +
         `Training date: ${dateLabel}\nTrainer: ${training.trainer || 'ReDry'}\n\n` +
-        `Next step: add your crew on the training page so each person can sign ` +
-        `their field waiver before training day. Field rule: no signed waiver, no roof.\n\n` +
+        `Next step: add your crew so each person can sign their field waiver ` +
+        `before training day. Do that right on your training page:\n\n` +
+        `${pageLink}\n\n` +
+        `Field rule: no signed waiver, no roof.\n\n` +
         `Roof MRI / ReDry LLC`,
       attachments: [{
         filename: `Roof-MRI-Training-Agreement-${token}.pdf`,

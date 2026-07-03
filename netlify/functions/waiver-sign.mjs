@@ -63,13 +63,15 @@ export default async (req, context) => {
       const dateLabel = participant.training_date
         ? String(participant.training_date).slice(0, 10)
         : 'TBD';
+      const base = (process.env.SITE_BASE_URL || process.env.URL || 'https://onboarding.roof-mri.com').replace(/\/$/, '');
       await sendEmail({
         to: notifyRecipients(),
         subject: `All crew waivers signed: ${participant.company} (${dateLabel})`,
         text:
           `Every participant on the ${participant.company} roster has signed their ` +
           `field waiver. The crew is cleared for the roof.\n\n` +
-          `Training date: ${dateLabel}\nToken: ${participant.training_token}`,
+          `Training date: ${dateLabel}\n` +
+          `Training page: ${base}/training/${participant.training_token}`,
       });
     } catch (err) {
       console.error('all-signed notification failed', err);
