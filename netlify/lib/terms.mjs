@@ -3,7 +3,7 @@
    Bump TERMS_VERSION whenever the terms change; every signature stores the
    version it was executed against. */
 
-export const TERMS_VERSION = '2026-07-02.1';
+export const TERMS_VERSION = '2026-07-03.1';
 
 export const AGREEMENT_TITLE = 'Roof MRI Certification Training Agreement';
 
@@ -55,7 +55,7 @@ export const AGREEMENT_SECTIONS = [
     num: '06',
     title: 'Intellectual Property and Confidentiality',
     body: [
-      { text: 'All training materials, methods, and the Roof MRI process are proprietary and patent-pending. No reproduction, external teaching, sublicensing, or redistribution is allowed. Materials must be handled as confidential and may not be recorded or shared without ReDry\'s written permission. Unauthorized use may result in legal action and revocation of certification.' },
+      { text: 'All training materials, methods, and the Roof MRI process are proprietary and protected by an approved patent (issuance pending). No reproduction, external teaching, sublicensing, or redistribution is allowed. Materials must be handled as confidential and may not be recorded or shared without ReDry\'s written permission. Unauthorized use may result in legal action and revocation of certification.' },
     ],
   },
   {
