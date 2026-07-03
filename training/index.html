@@ -78,7 +78,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 <meta property="og:title" content="Your Roof MRI Certification Training">
 <meta property="og:description" content="Training prep, the day-of schedule, and agreement execution for Roof MRI certification.">
 <meta property="og:type" content="website">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect x='1' y='11.5' width='9' height='9' rx='2' fill='%2300BD70'/%3E%3Crect x='11.5' y='11.5' width='9' height='9' rx='2' fill='%23F2C94C'/%3E%3Crect x='22' y='11.5' width='9' height='9' rx='2' fill='%23EB5757'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/roof-mri-logo.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
@@ -146,11 +146,12 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   header.site{background:var(--navy)}
   .site-inner{display:flex;align-items:center;justify-content:space-between;padding:15px 0;gap:16px;flex-wrap:wrap}
   .wordmark{display:flex;align-items:center;gap:10px;text-decoration:none}
+  /* Logo mark colors come from the actual logo asset, not the UI tokens */
   .mark-squares{display:flex;gap:3px}
   .mark-squares i{width:10px;height:10px;display:block;border-radius:2px}
-  .mark-squares i:nth-child(1){background:var(--green)}
-  .mark-squares i:nth-child(2){background:var(--yellow)}
-  .mark-squares i:nth-child(3){background:var(--red)}
+  .mark-squares i:nth-child(1){background:#00BF63}
+  .mark-squares i:nth-child(2){background:#FFDE59}
+  .mark-squares i:nth-child(3){background:#F81414}
   .wordmark b{font-size:16px;font-weight:800;letter-spacing:.08em;color:var(--white)}
   .tagline{font-size:10px;font-weight:700;letter-spacing:.8px;color:var(--green);text-transform:uppercase;background:var(--green-wash-2);border-radius:100px;padding:4px 12px}
   @media (max-width:560px){.tagline{display:none}}
@@ -800,8 +801,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
   <div class="wrap foot-inner">
     <div>
       <div class="foot-brand">
-        <span class="mark-squares"><i></i><i></i><i></i></span>
-        <b>ROOF MRI</b>
+        <img src="/roof-mri-logo.png" alt="Roof MRI" width="62" height="52">
       </div>
       <p class="foot-tag">Advancing the Science of Moisture Detection · <a href="https://roof-mri.com">roof-mri.com</a></p>
     </div>
