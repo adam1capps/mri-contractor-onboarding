@@ -78,12 +78,19 @@ Professional package, `TRAINING_TOKEN = "demo-token"`) and will be injected serv
 - **Waiver page hardening**: prod waiver view should look up the participant by `ptk` and show
   their name/training details server-side.
 
-## Standing design rules (per Adam, enforce on all Roof MRI/ReDry work)
+## Standing design rules (per Adam, updated Jul 2026)
 
-- White/light backgrounds only. Brand navy `#1E2C55` and green `#00BD70` as **text and borders
-  only, never fills** (logo squares at mark scale are the sole exception).
-- Trebuchet MS throughout. **No em dashes anywhere in copy** (including emails and PDFs).
-- Accent colors in use: yellow `#E8A614`, red `#D6453C`.
+- **Match the Roof MRI Connect app** (connect.roof-mri.com). Its design tokens are mirrored in
+  the `:root` block of `training/index.html`; when in doubt, pull the app's CSS bundle from
+  `/assets/*.css` and re-extract. Core system: Plus Jakarta Sans (400-800), off-white `#F7F8FA`
+  page with white cards (radius 10/16, soft layered shadows, gray-100/200 borders), navy
+  `#1E2C55` fills for topbar/hero/buttons (hover `#2a3d6e`), green `#00BD70` CTAs with hover
+  lift (hover `#00A862`), tinted status fills (green-light `#E6F9F0`, washes `#00bd7014/1f`),
+  pill badges (radius 100px, 10px, 700-800 weight, uppercase, letter-spacing .8px), form focus
+  rings `0 0 0 3px #00bd7014`, accents yellow `#F2C94C` and red `#EB5757`.
+- The pre-Jul-2026 rules (Trebuchet MS, navy/green as text and borders only, never fills) are
+  **retired**; older docs referencing them are stale.
+- Still standing: **no em dashes anywhere in copy** (including emails and PDFs).
 
 ## Session conventions
 
