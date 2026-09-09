@@ -5,6 +5,11 @@
 [build]
   publish = "."
 
+[build.environment]
+  # Functions use node: builtins and modern globals; pin the runtime rather
+  # than inheriting whatever Netlify's default happens to be.
+  NODE_VERSION = "20"
+
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"

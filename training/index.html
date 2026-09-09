@@ -46,16 +46,20 @@ NEON SCHEMA (canonical copy: db/schema.sql)
                waiver_sig_type, waiver_sig_data, ip, user_agent,
                waiver_signed_at)
 
-ENDPOINTS (implemented as Netlify Functions v2 in netlify/functions/;
-page falls back to demo mode when the API or database is unavailable)
+ENDPOINTS (implemented as Netlify Functions v2 in netlify/functions/)
+  Demo fallback applies ONLY to demo-token. On a real token a failed write
+  surfaces the error and nothing is marked signed: telling a contractor the
+  agreement is executed, or a trainee that the waiver is signed, when nothing
+  reached the database is the one outcome this page must never produce.
   submitAgreement(payload)  ->  POST /api/training/:token/agreement
   addParticipant(payload)   ->  POST /api/training/:token/participants
   loadRoster()              ->  GET  /api/training/:token/participants
   submitWaiver(payload)     ->  POST /api/waiver/:ptk/sign
 
 FORMAT RENDERS
-  trainings.format = 'onsite' (default) or 'nashville'. Preview the
-  Nashville render with ?format=nashville (travel/hotel prep, ReDry
+  trainings.format = 'onsite' (default) or 'nashville'. The server's
+  format governs a real training; ?format=nashville previews the
+  Nashville render on the demo page only (travel/hotel prep, ReDry
   facility, roof provided by ReDry, adjusted day-of cancellation).
   Nashville policy copy is DRAFT and needs Adam's sign-off.
 
@@ -73,7 +77,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Your Roof MRI Certification Training | Summit Commercial Roofing</title>
+<title>Your Roof MRI Certification Training</title>
 <meta name="description" content="Your Roof MRI Certification Training page: how to prepare, how the day runs, what happens after, and the Training Agreement, ready to sign.">
 <meta property="og:title" content="Your Roof MRI Certification Training">
 <meta property="og:description" content="Training prep, the day-of schedule, and agreement execution for Roof MRI certification.">
@@ -403,12 +407,12 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
 
   <section class="meta-card">
     <div class="eyebrow">Roof MRI Certification Training</div>
-    <h1 id="heroCompany">Summit Commercial Roofing</h1>
+    <h1 id="heroCompany">Your Certification Training</h1>
     <div class="meta-grid" id="metaGrid">
-      <div class="cell"><span class="k">Training Date</span><span class="v" id="metaDate">Thu, Aug 13, 2026</span></div>
-      <div class="cell"><span class="k">Meet</span><span class="v" id="metaMeet">8:00 AM, Summit's Office</span></div>
-      <div class="cell"><span class="k">Trainer</span><span class="v" id="metaTrainer">Adam Capps</span></div>
-      <div class="cell"><span class="k">Package</span><span class="v" id="metaPackage">Professional</span></div>
+      <div class="cell"><span class="k">Training Date</span><span class="v" id="metaDate">TBD</span></div>
+      <div class="cell"><span class="k">Meet</span><span class="v" id="metaMeet">TBD</span></div>
+      <div class="cell"><span class="k">Trainer</span><span class="v" id="metaTrainer">TBD</span></div>
+      <div class="cell"><span class="k">Package</span><span class="v" id="metaPackage">TBD</span></div>
     </div>
     <p class="lede">You're officially on the path to Roof MRI Certification. Done right, this training pays for itself immediately by delivering real value to your clients. Everything you need is on this page: how to prepare, how the day runs, what happens after, and the agreement that makes it official.</p>
   </section>
@@ -663,10 +667,10 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     <!-- Signing card -->
     <div class="sign-card" id="signCard">
       <h3>Execute the agreement</h3>
-      <p class="hint" id="signHint">Signed by an owner or officer authorized to bind Summit Commercial Roofing.</p>
+      <p class="hint" id="signHint">Signed by an owner or officer authorized to bind your company.</p>
 
       <div class="fields">
-        <div class="field"><label for="fCompany">Company</label><input id="fCompany" type="text" value="Summit Commercial Roofing" readonly></div>
+        <div class="field"><label for="fCompany">Company</label><input id="fCompany" type="text" value="" readonly></div>
         <div class="field"><label for="fName">Your full legal name</label><input id="fName" type="text" placeholder="First Last" autocomplete="name"></div>
         <div class="field"><label for="fTitle">Title</label><input id="fTitle" type="text" placeholder="Owner, President, VP..."></div>
         <div class="field"><label for="fEmail">Email</label><input id="fEmail" type="email" placeholder="you@company.com" autocomplete="email"><span class="field-error" id="fEmailError" hidden>Enter a valid email address, like you@company.com.</span></div>
@@ -752,7 +756,7 @@ DESIGN RULES (per Adam, Jul 2026: match the Roof MRI Connect app)
     <div class="waiver-card">
       <div class="eyebrow">Roof MRI Field Training</div>
       <h1>Participant Waiver and Release</h1>
-      <p class="waiver-meta" id="waiverMeta">SUMMIT COMMERCIAL ROOFING · TRAINING DATE AUG 13, 2026 · REDRY LLC</p>
+      <p class="waiver-meta" id="waiverMeta">ROOF MRI FIELD TRAINING WAIVER · REDRY LLC</p>
 
       <div class="clauses">
         <div class="clause"><span class="n">1</span><p><b>Assumption of risk.</b> I understand that rooftop training involves inherent risks, including falls, serious injury, and death. I am participating voluntarily and I accept those risks.</p></div>
@@ -822,7 +826,24 @@ const pathMatch = location.pathname.match(/^\/training\/([A-Za-z0-9][A-Za-z0-9-]
 const qs = new URLSearchParams(location.search);
 const TRAINING_TOKEN = (pathMatch && pathMatch[1]) || qs.get('t') || 'demo-token';
 const WAIVER_PTK = (pathMatch && pathMatch[2]) || qs.get('ptk');
-let TRAINING_FORMAT = qs.get('format') === 'nashville' ? 'nashville' : 'onsite';
+const IS_DEMO = TRAINING_TOKEN === 'demo-token';
+/* The format override is a preview affordance for the demo page only. On a real
+   token it would show a contractor Nashville travel prep and unapproved draft
+   cancellation terms while the agreement they sign still says otherwise, so the
+   server's format is the only thing that can set it. */
+let TRAINING_FORMAT = (IS_DEMO && qs.get('format') === 'nashville') ? 'nashville' : 'onsite';
+
+/* The demo contractor. Kept here rather than in the markup so no real
+   contractor can ever see another company's name in the page shell. */
+const DEMO_TRAINING = {
+  company: 'Sample Roofing Co.',
+  training_date: '2026-08-13',
+  meet_location: "8:00 AM, the contractor's office",
+  trainer: 'Adam Capps',
+  package: 'Professional',
+  format: TRAINING_FORMAT,
+  agreement_signed: false,
+};
 
 /* ── Nashville format render ───────────── */
 function renderNashville() {
@@ -952,10 +973,15 @@ document.getElementById('clearCompany').addEventListener('click', () => padCompa
 const DRAFT_KEY = 'rmri:draft:' + TRAINING_TOKEN;
 const SIGNED_KEY = 'rmri:signed:' + TRAINING_TOKEN;
 const ROSTER_KEY = 'rmri:roster:' + TRAINING_TOKEN;
+/* A null key means "this state has nowhere safe to live" (the waiver preview,
+   which has no participant token). Persisting it anyway would put one person's
+   name and signature in a bucket the next training reads back. */
 function store(k, v) {
+  if (!k) return;
   try { v === null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {}
 }
 function loadStored(k) {
+  if (!k) return null;
   try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; }
 }
 function drawDataUrl(pad, dataUrl, done) {
@@ -1037,6 +1063,14 @@ btnSign.addEventListener('click', async () => {
     /* server adds: ip, user_agent; generates PDF; sends copy via email */
   };
   const result = await submitAgreement(payload);
+  if (!result || result.ok === false) {
+    /* Leave the draft in place so nothing they typed or drew is lost. */
+    btnSign.disabled = false;
+    btnSign.textContent = 'Sign the Agreement';
+    signNote.textContent = 'We could not record your signature (' + (result && result.error || 'network error')
+      + '). Nothing has been signed yet. Please try again, or email adam@re-dry.com.';
+    return;
+  }
   store(DRAFT_KEY, null);
   store(SIGNED_KEY, {
     signer: payload.signer_name, title: payload.signer_title,
@@ -1057,22 +1091,36 @@ btnSign.addEventListener('click', async () => {
   document.getElementById('executed').scrollIntoView({ behavior: 'smooth', block: 'center' });
 });
 
+/* Demo fallback exists so deploy previews work without a database. It must
+   never apply to a real token: claiming success for a signature that was not
+   recorded is how a contractor ends up believing they are done while ReDry has
+   no agreement on file, and how a trainee reaches the roof with no waiver. */
+async function postJson(url, body) {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  if (res.ok) return await res.json();
+  let msg = 'HTTP ' + res.status;
+  try { const b = await res.json(); if (b && b.error) msg = b.error; } catch (e) {}
+  throw new Error(msg);
+}
+
 async function submitAgreement(payload) {
   /* POST /api/training/:token/agreement (Netlify fn -> Neon). Server adds
      ip and user agent, stores the signature, generates the executed PDF,
      and emails it. Falls back to demo mode when the API or database is
      unavailable, so deploy previews keep working. */
   try {
-    const res = await fetch('/api/training/' + TRAINING_TOKEN + '/agreement', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
+    return await postJson('/api/training/' + TRAINING_TOKEN + '/agreement', payload);
   } catch (err) {
-    console.warn('submitAgreement: demo mode (' + err.message + ')', payload);
-    return { ok: true, demo: true };
+    if (IS_DEMO) {
+      console.warn('submitAgreement: demo mode (' + err.message + ')', payload);
+      return { ok: true, demo: true };
+    }
+    console.error('submitAgreement failed', err);
+    return { ok: false, error: err.message };
   }
 }
 
@@ -1129,7 +1177,14 @@ document.getElementById('btnAddP').addEventListener('click', async () => {
   pEmail.classList.toggle('invalid', emailBad);
   rosterError.hidden = !(nameBad || emailBad);
   if (nameBad || emailBad) return;
-  roster.push(await addParticipant({ name, email }));
+  const added = await addParticipant({ name, email });
+  if (!added) {
+    rosterError.textContent = 'We could not add that trainee. Please try again, or email adam@re-dry.com.';
+    rosterError.hidden = false;
+    return;
+  }
+  const already = roster.some(r => r.waiver_token === added.waiver_token);
+  if (!already) roster.push(added);
   store(ROSTER_KEY, roster);
   renderRoster();
   pName.value = '';
@@ -1143,16 +1198,15 @@ async function addParticipant(p) {
   /* POST /api/training/:token/participants. The server generates the waiver
      token and emails the trainee their unique signing link. */
   try {
-    const res = await fetch('/api/training/' + TRAINING_TOKEN + '/participants', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p)
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return (await res.json()).participant;
+    return (await postJson('/api/training/' + TRAINING_TOKEN + '/participants', p)).participant;
   } catch (err) {
-    console.warn('addParticipant: demo mode (' + err.message + ')', p);
-    return { name: p.name, email: p.email, waiver_token: Math.random().toString(36).slice(2, 10), signed: false };
+    if (IS_DEMO) {
+      console.warn('addParticipant: demo mode (' + err.message + ')', p);
+      return { name: p.name, email: p.email, waiver_token: Math.random().toString(36).slice(2, 10), signed: false };
+    }
+    /* A locally invented waiver token would hand the trainee a dead link. */
+    console.error('addParticipant failed', err);
+    return null;
   }
 }
 function esc(s) {
@@ -1176,8 +1230,13 @@ function esc(s) {
 
 /* ── Waiver view ───────────────────────── */
 let padWaiver = null;
-const WDRAFT_KEY = 'rmri:wdraft:' + (WAIVER_PTK || 'demo-ptk');
-const WSIGNED_KEY = 'rmri:wsigned:' + (WAIVER_PTK || 'demo-ptk');
+/* Namespaced by training AND participant. The old shared 'demo-ptk' bucket meant
+   one browser used for two trainings restored the wrong person's name and drawn
+   signature, and could show "Waiver signed" to someone who never signed. Without
+   a real ptk (the preview) nothing is persisted at all. */
+const WKEY_ID = WAIVER_PTK ? TRAINING_TOKEN + ':' + WAIVER_PTK : null;
+const WDRAFT_KEY = WKEY_ID ? 'rmri:wdraft:' + WKEY_ID : null;
+const WSIGNED_KEY = WKEY_ID ? 'rmri:wsigned:' + WKEY_ID : null;
 
 function openWaiverView() {
   document.body.classList.add('show-waiver');
@@ -1242,13 +1301,21 @@ function restoreWaiverState() {
 btnWaiver.addEventListener('click', async () => {
   btnWaiver.disabled = true;
   btnWaiver.textContent = 'Signing...';
-  await submitWaiver({
+  const wResult = await submitWaiver({
     name: wName.value.trim(),
     sig_type: 'draw',
     sig_data: padWaiver.data(),
     terms_version: TERMS_VERSION,
     signed_at: new Date().toISOString()
   });
+  if (!wResult || wResult.ok === false) {
+    btnWaiver.disabled = false;
+    btnWaiver.textContent = 'Sign the Waiver';
+    document.getElementById('waiverNote').textContent =
+      'We could not record your waiver (' + (wResult && wResult.error || 'network error')
+      + '). It is NOT signed yet. Please try again, or email adam@re-dry.com.';
+    return;
+  }
   store(WDRAFT_KEY, null);
   store(WSIGNED_KEY, { name: wName.value.trim(), when: new Date().toLocaleString() });
   document.getElementById('wrName').textContent = wName.value.trim();
@@ -1260,16 +1327,15 @@ async function submitWaiver(p) {
      signature with ip and user agent, flips the roster status chip, and
      notifies Adam/Regina once the whole crew has signed. */
   try {
-    const res = await fetch('/api/waiver/' + (WAIVER_PTK || 'demo-ptk') + '/sign', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(p)
-    });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    return await res.json();
+    return await postJson('/api/waiver/' + (WAIVER_PTK || 'demo-ptk') + '/sign', p);
   } catch (err) {
-    console.warn('submitWaiver: demo mode (' + err.message + ')', p);
-    return { ok: true, demo: true };
+    if (!WAIVER_PTK) {
+      /* The preview has no participant to sign for. */
+      console.warn('submitWaiver: preview only (' + err.message + ')', p);
+      return { ok: true, demo: true };
+    }
+    console.error('submitWaiver failed', err);
+    return { ok: false, error: err.message };
   }
 }
 
@@ -1289,15 +1355,27 @@ function applyTraining(t) {
     : '';
   document.title = 'Your Roof MRI Certification Training | ' + t.company;
   document.getElementById('heroCompany').textContent = t.company;
-  if (dateLabel) document.getElementById('metaDate').textContent = dateLabel;
-  if (t.meet_location) document.getElementById('metaMeet').textContent = t.meet_location;
-  if (t.trainer) document.getElementById('metaTrainer').textContent = t.trainer;
-  if (t.package) document.getElementById('metaPackage').textContent = t.package;
+  /* Always assign. Guarding on truthiness would leave the placeholder (or, before
+     this page was neutralized, another contractor's details) on screen for any
+     training whose columns are empty. */
+  document.getElementById('metaDate').textContent = dateLabel || 'TBD';
+  document.getElementById('metaMeet').textContent = t.meet_location || 'TBD';
+  document.getElementById('metaTrainer').textContent = t.trainer || 'TBD';
+  document.getElementById('metaPackage').textContent = t.package || 'TBD';
   document.getElementById('signHint').textContent =
     'Signed by an owner or officer authorized to bind ' + t.company + '.';
   document.getElementById('fCompany').value = t.company;
   document.getElementById('waiverMeta').textContent =
     (t.company + ' · Training date ' + dateLabel + ' · ReDry LLC').toUpperCase();
+  /* The agreement text lives in this page and the version is checked by the
+     server at submit time. If the two ever drift, every signature would be
+     rejected with no explanation, so stop here and say so plainly rather than
+     letting someone sign terms we would refuse to record. */
+  if (t.terms_version && t.terms_version !== TERMS_VERSION) {
+    console.error('terms version drift: page ' + TERMS_VERSION + ', server ' + t.terms_version);
+    showStaleTerms();
+    return;
+  }
   if (t.agreement_signed && !document.getElementById('executed').classList.contains('show')) {
     const card = document.getElementById('signCard');
     card.style.display = 'none';
@@ -1307,17 +1385,58 @@ function applyTraining(t) {
     card.after(done);
     document.getElementById('roster').classList.add('show');
     startRosterPolling();
+  } else if (!t.agreement_signed) {
+    /* The server is the record. If this browser is showing an executed state the
+       database does not have (a signature submitted during an outage), clear it
+       so the contractor is asked to sign again rather than believing they are
+       done while ReDry has no agreement on file. */
+    store(SIGNED_KEY, null);
+    document.getElementById('executed').classList.remove('show');
+    const card = document.getElementById('signCard');
+    if (card) card.style.display = '';
   }
 }
+
+/* The agreement on screen is not the one the server would record. Block signing
+   rather than let someone execute terms that will be rejected. */
+function showStaleTerms() {
+  const card = document.getElementById('signCard');
+  if (card) card.style.display = 'none';
+  const btn = document.getElementById('btnSign');
+  if (btn) btn.disabled = true;
+  const note = document.createElement('div');
+  note.className = 'plain';
+  note.innerHTML = '<b>This page is out of date.</b> The Training Agreement has been updated since '
+    + 'this page was loaded. Please refresh to get the current version before signing. '
+    + 'If refreshing does not help, email adam@re-dry.com.';
+  if (card && card.parentNode) card.parentNode.insertBefore(note, card);
+}
+
+/* An unreachable API used to fall through to the built-in demo, which meant a
+   real contractor saw someone else's training and could sign against it. Say
+   plainly that the page did not load instead. */
+function showLoadError() {
+  const card = document.getElementById('signCard');
+  if (card) card.style.display = 'none';
+  const btn = document.getElementById('btnSign');
+  if (btn) btn.disabled = true;
+  const note = document.createElement('div');
+  note.className = 'plain';
+  note.innerHTML = '<b>We could not load this training.</b> Please refresh in a moment. '
+    + 'If it keeps happening, contact ReDry at adam@re-dry.com and we will sort it out.';
+  const anchor = document.getElementById('signCard') || document.getElementById('roster');
+  if (anchor && anchor.parentNode) anchor.parentNode.insertBefore(note, anchor);
+}
 async function hydrateTraining() {
-  if (TRAINING_TOKEN === 'demo-token') return; /* built-in demo content */
+  if (IS_DEMO) { applyTraining(DEMO_TRAINING); return; }
   try {
     const res = await fetch('/api/training/' + TRAINING_TOKEN);
     if (res.status === 404) { location.replace('/404.html'); return; }
     if (!res.ok) throw new Error('HTTP ' + res.status);
     applyTraining(await res.json());
   } catch (err) {
-    console.warn('hydrateTraining failed, showing demo content', err);
+    console.warn('hydrateTraining failed', err);
+    showLoadError();
   }
 }
 hydrateTraining();

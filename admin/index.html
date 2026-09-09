@@ -132,8 +132,26 @@ Design tokens mirror the Roof MRI Connect app; no em dashes in copy.
   .pill.wait{background:#f2c94c26;border:1px solid #f2c94c66;color:#8F6708}
   .pill.done{background:var(--green-wash-2);border:1px solid var(--green-border);color:var(--green-hover)}
   .t-empty{font-size:14px;color:var(--gray-500);padding:8px 2px}
-  .list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px}
+  .list-head{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:16px;flex-wrap:wrap}
   .list-head h2{margin-bottom:0}
+  .list-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .list-tools input[type=search]{font:inherit;font-size:13.5px;padding:8px 12px;border:1px solid var(--gray-200);border-radius:10px;min-width:230px;background:#fff}
+  .list-tools input[type=search]:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px #00bd7014}
+  .tog{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray-500);white-space:nowrap}
+  .t-count{font-size:12.5px;color:var(--gray-500);margin:-8px 0 12px}
+  .t-actions{display:flex;gap:6px;flex-wrap:wrap;margin-left:auto}
+  .t-row.cancelled{opacity:.6}
+  .pill.stop{background:#eb575726;border:1px solid #eb575766;color:#B3261E}
+  .edit-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;width:100%;margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200)}
+  .edit-grid .full{grid-column:1/-1}
+  .edit-grid label{display:block;font-size:11px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--gray-500);margin-bottom:4px}
+  .edit-grid input,.edit-grid select{width:100%;font:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--gray-200);border-radius:10px;background:#fff}
+  .edit-grid input:focus,.edit-grid select:focus{outline:none;border-color:var(--green);box-shadow:0 0 0 3px #00bd7014}
+  @media (max-width:600px){.edit-grid{grid-template-columns:1fr}}
+  .db-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px}
+  .db-list{font-size:13px;color:var(--gray-500);margin-top:8px}
+  .db-warn{font-size:13.5px;color:#8F6708;background:#f2c94c1f;border:1px solid #f2c94c66;border-radius:10px;padding:10px 12px;margin-top:10px}
+  .db-bad{font-size:13.5px;color:#B3261E;background:#eb57571f;border:1px solid #eb575766;border-radius:10px;padding:10px 12px;margin-top:10px}
 
   .status-note{font-size:13.5px;color:var(--gray-500)}
   .spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--gray-200);border-top-color:var(--green);border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px}
@@ -193,6 +211,14 @@ Design tokens mirror the Roof MRI Connect app; no em dashes in copy.
   <!-- App -->
   <div id="stateApp" hidden>
 
+    <div class="card" id="dbCard" hidden>
+      <div class="list-head">
+        <h2>Database</h2>
+        <button class="btn mini ghost" id="btnDbCheck" type="button">Check again</button>
+      </div>
+      <div id="dbBody"><p class="t-empty">Checking the database...</p></div>
+    </div>
+
     <div class="card">
       <h2>New training</h2>
       <p class="sub">Fill in what changes contractor to contractor. Everything else on their page renders automatically.</p>
@@ -204,7 +230,7 @@ Design tokens mirror the Roof MRI Connect app; no em dashes in copy.
       <p class="format-hint" id="fmtHint">Trainer travels to the contractor. Their page asks for roof addresses and a training room.</p>
 
       <div class="fields">
-        <div class="field full"><label for="nCompany">Company</label><input id="nCompany" type="text" placeholder="Summit Commercial Roofing" autocomplete="organization"></div>
+        <div class="field full"><label for="nCompany">Company</label><input id="nCompany" type="text" placeholder="Acme Commercial Roofing" autocomplete="organization"></div>
         <div class="field"><label for="nContact">Contact name</label><input id="nContact" type="text" placeholder="First Last"></div>
         <div class="field"><label for="nEmail">Contact email</label><input id="nEmail" type="email" placeholder="owner@company.com"></div>
         <div class="field"><label for="nDate">Training date</label><input id="nDate" type="date"></div>
@@ -234,8 +260,13 @@ Design tokens mirror the Roof MRI Connect app; no em dashes in copy.
     <div class="card">
       <div class="list-head">
         <h2>All trainings</h2>
-        <button class="btn mini ghost" id="btnRefresh" type="button">Refresh</button>
+        <div class="list-tools">
+          <input id="qSearch" type="search" placeholder="Search company, contact, email or token" aria-label="Search trainings">
+          <label class="tog"><input type="checkbox" id="qAll"> Show cancelled</label>
+          <button class="btn mini ghost" id="btnRefresh" type="button">Refresh</button>
+        </div>
       </div>
+      <p class="t-count" id="tCount" hidden></p>
       <div class="t-list" id="tList"><p class="t-empty">Loading trainings...</p></div>
     </div>
 
@@ -324,13 +355,102 @@ async function render() {
     return;
   }
   show('stateApp');
-  if (res.ok) renderList((await res.json()).trainings);
-  else $('tList').innerHTML = '<p class="t-empty">Could not load trainings. Check that the database is configured, then hit Refresh.</p>';
+  if (res.ok) {
+    const data = await res.json();
+    renderList(data.trainings, data.total);
+  } else if (res.status === 401) {
+    /* An auth failure used to be reported as a database problem, which sent
+       whoever was on call off to debug Neon for no reason. */
+    const data = await res.json().catch(() => ({}));
+    $('tList').innerHTML = '<p class="t-empty">' + esc(data.error || 'Your session could not be verified.')
+      + ' Try Switch account to sign in again.</p>';
+  } else {
+    $('tList').innerHTML = '<p class="t-empty">Could not load trainings. See the database panel above, then hit Refresh.</p>';
+  }
+  loadDbStatus();
 }
 
-async function api(method, body) {
+/* ── Database panel ─────────────────────── */
+function renderDb(d) {
+  $('dbCard').hidden = false;
+  const b = $('dbBody');
+  if (!d.configured) {
+    b.innerHTML = '<div class="db-bad"><b>No database is connected.</b><br>' + esc(d.error || '') + '</div>';
+    return;
+  }
+  if (!d.connected) {
+    b.innerHTML = '<div class="db-bad"><b>The database is not responding.</b><br>' + esc(d.error || '')
+      + '</div><p class="db-list">Connection comes from ' + esc(d.env_var || 'no environment variable') + '.</p>';
+    return;
+  }
+  const counts = d.counts;
+  let html = '<div class="db-row">'
+    + '<span class="pill ' + (d.schema_applied ? 'done' : 'wait') + '">'
+    + (d.schema_applied ? 'Schema ready' : 'Setup needed') + '</span>'
+    + '<span class="pill fmt">' + esc(d.env_var || 'unset') + '</span>';
+  if (counts) {
+    html += '<span class="pill fmt">' + counts.trainings + ' trainings</span>'
+         +  '<span class="pill fmt">' + counts.agreements + ' agreements</span>'
+         +  '<span class="pill fmt">' + counts.waivers_signed + '/' + counts.participants + ' waivers signed</span>';
+  }
+  html += '</div>';
+
+  const drifted = Object.keys(d.drifted || {});
+  if (!d.schema_applied) {
+    const missing = (d.missing || []).length ? 'Missing tables: ' + d.missing.join(', ') + '. ' : '';
+    const drift = drifted.length
+      ? 'Tables missing columns: ' + drifted.map(t => t + ' (' + d.drifted[t].join(', ') + ')').join('; ') + '. '
+      : '';
+    html += '<div class="db-warn">' + esc(missing + drift)
+      + 'Contractors cannot sign until this is fixed.</div>'
+      + '<button class="btn go" id="btnDbApply" type="button" style="margin-top:12px">Create the tables</button>'
+      + '<p class="form-error" id="dbApplyError" hidden></p>';
+  }
+  if (d.env_conflict) {
+    html += '<div class="db-warn">NETLIFY_DATABASE_URL and DATABASE_URL are both set and point at '
+      + 'different databases. Records will split between them. Unset whichever one is wrong.</div>';
+  }
+  b.innerHTML = html;
+
+  const apply = $('btnDbApply');
+  if (apply) {
+    apply.addEventListener('click', async () => {
+      apply.disabled = true;
+      apply.textContent = 'Creating...';
+      try {
+        const res = await apiFetch('/api/admin/db', 'POST', { action: 'apply' });
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+        renderDb(data);
+        if ((data.warnings || []).length) {
+          $('dbBody').insertAdjacentHTML('beforeend',
+            '<div class="db-warn">Applied, but some constraints could not be added: '
+            + esc(data.warnings.map(w => w.name).join(', '))
+            + '. Existing rows may already violate them.</div>');
+        }
+        loadList();
+      } catch (err) {
+        const e = $('dbApplyError');
+        if (e) { e.textContent = 'Could not apply the schema: ' + err.message; e.hidden = false; }
+        apply.disabled = false;
+        apply.textContent = 'Create the tables';
+      }
+    });
+  }
+}
+
+async function loadDbStatus() {
+  try {
+    const res = await apiFetch('/api/admin/db', 'GET');
+    if (!res.ok && res.status !== 502) return;
+    renderDb(await res.json());
+  } catch (err) { /* the panel simply stays hidden */ }
+}
+$('btnDbCheck').addEventListener('click', loadDbStatus);
+
+async function apiFetch(path, method, body) {
   const token = await clerk.session.getToken();
-  return fetch('/api/admin/trainings', {
+  return fetch(path, {
     method,
     headers: {
       'Authorization': 'Bearer ' + token,
@@ -339,6 +459,19 @@ async function api(method, body) {
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
 }
+function api(method, body) { return apiFetch(listUrl(method === 'GET'), method, body); }
+
+/* Search and the cancelled toggle are server side so they still work once
+   there are more trainings than one page. */
+function listUrl(withQuery) {
+  if (!withQuery) return '/api/admin/trainings';
+  const p = new URLSearchParams();
+  const q = ($('qSearch').value || '').trim();
+  if (q) p.set('q', q);
+  if ($('qAll').checked) p.set('all', '1');
+  const qs = p.toString();
+  return '/api/admin/trainings' + (qs ? '?' + qs : '');
+}
 
 $('btnSwitch').addEventListener('click', () => clerk.signOut());
 
@@ -346,7 +479,8 @@ $('btnSwitch').addEventListener('click', () => clerk.signOut());
 function fmtDate(d) {
   return new Date(d + 'T12:00:00').toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
 }
-$('btnCreate').addEventListener('click', async () => {
+$('btnCreate').addEventListener('click', () => createTraining(false));
+async function createTraining(allowDuplicate) {
   const company = $('nCompany').value.trim();
   const contact = $('nContact').value.trim();
   const email = $('nEmail').value.trim();
@@ -381,8 +515,20 @@ $('btnCreate').addEventListener('click', async () => {
       meet_location: $('nMeet').value.trim(),
       format,
       send_email: $('nSend').checked,
+      allow_duplicate: allowDuplicate === true,
     });
     const data = await res.json().catch(() => ({}));
+    if (res.status === 409 && data.duplicate_token) {
+      errEl.innerHTML = esc(data.error) + ' ';
+      const again = document.createElement('button');
+      again.className = 'btn mini';
+      again.type = 'button';
+      again.textContent = 'Create anyway';
+      again.addEventListener('click', () => createTraining(true));
+      errEl.appendChild(again);
+      errEl.hidden = false;
+      return;
+    }
     if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
     $('createdLink').textContent = data.link;
     $('createdMail').textContent = data.emailed
@@ -391,7 +537,10 @@ $('btnCreate').addEventListener('click', async () => {
           ? 'Email could not be sent (check SENDGRID_API_KEY). Copy the link and send it yourself.'
           : 'No email sent. Copy the link and send it when ready.');
     $('created').classList.add('show');
-    ['nCompany', 'nContact', 'nEmail'].forEach(id => { $(id).value = ''; });
+    /* Date and meet have to clear too. Booking two contractors back to back is
+       the normal case, and the second one silently inheriting the first one's
+       training date is the kind of mistake that reaches the signed agreement. */
+    ['nCompany', 'nContact', 'nEmail', 'nDate', 'nMeet'].forEach(id => { $(id).value = ''; });
     loadList();
   } catch (err) {
     errEl.textContent = 'Could not create the training: ' + err.message;
@@ -400,7 +549,7 @@ $('btnCreate').addEventListener('click', async () => {
     btn.disabled = false;
     btn.textContent = 'Create training';
   }
-});
+}
 ['nCompany', 'nContact', 'nEmail', 'nDate'].forEach(id =>
   $(id).addEventListener('input', e => { e.target.classList.remove('invalid'); $('createError').hidden = true; }));
 $('btnCopyLink').addEventListener('click', e => {
@@ -413,41 +562,141 @@ $('btnCopyLink').addEventListener('click', e => {
 function esc(s) {
   return String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }
-function renderList(list) {
+function renderList(list, total) {
   const el = $('tList');
+  const count = $('tCount');
   if (!list || !list.length) {
-    el.innerHTML = '<p class="t-empty">No trainings yet. Create the first one above.</p>';
+    el.innerHTML = ($('qSearch').value || '').trim()
+      ? '<p class="t-empty">No trainings match that search.</p>'
+      : '<p class="t-empty">No trainings yet. Create the first one above.</p>';
+    count.hidden = true;
     return;
   }
+  count.hidden = false;
+  count.textContent = total > list.length
+    ? 'Showing ' + list.length + ' of ' + total + '. Narrow it with search.'
+    : list.length + (list.length === 1 ? ' training' : ' trainings');
   el.innerHTML = '';
-  list.forEach(t => {
-    const row = document.createElement('div');
-    row.className = 't-row';
-    const crew = t.crew > 0
-      ? '<span class="pill ' + (t.crew_signed === t.crew ? 'done' : 'wait') + '">Crew ' + t.crew_signed + '/' + t.crew + ' signed</span>'
-      : '';
-    row.innerHTML =
-      '<div class="t-who"><b>' + esc(t.company) + '</b><span>' + fmtDate(String(t.training_date).slice(0, 10)) + ' · ' + esc(t.contact_name || '') + '</span></div>' +
-      '<span class="pill fmt">' + (t.format === 'nashville' ? 'Nashville' : 'On-site') + '</span>' +
-      '<span class="pill ' + (t.agreement_signed ? 'done' : 'wait') + '">' + (t.agreement_signed ? 'Agreement signed' : 'Awaiting agreement') + '</span>' +
-      crew +
-      '<button class="btn mini" type="button">Copy link</button>' +
-      '<a class="btn mini ghost" href="' + esc(t.link) + '" target="_blank" rel="noopener">Open</a>';
-    row.querySelector('button').addEventListener('click', e => {
-      navigator.clipboard && navigator.clipboard.writeText(t.link);
-      e.target.textContent = 'Copied';
-      setTimeout(() => { e.target.textContent = 'Copy link'; }, 1500);
-    });
-    el.appendChild(row);
-  });
+  list.forEach(t => el.appendChild(trainingRow(t)));
 }
+
+function trainingRow(t) {
+  const row = document.createElement('div');
+  row.className = 't-row' + (t.status === 'cancelled' ? ' cancelled' : '');
+  const crew = t.crew > 0
+    ? '<span class="pill ' + (t.crew_signed === t.crew ? 'done' : 'wait') + '">Crew ' + t.crew_signed + '/' + t.crew + ' signed</span>'
+    : '';
+  const cancelled = t.status === 'cancelled' ? '<span class="pill stop">Cancelled</span>' : '';
+  const signedBy = t.agreement_signed && t.signer_name
+    ? ' · signed by ' + esc(t.signer_name)
+    : '';
+  row.innerHTML =
+    '<div class="t-who"><b>' + esc(t.company) + '</b><span>' + fmtDate(String(t.training_date).slice(0, 10)) + ' · ' + esc(t.contact_name || '') + signedBy + '</span></div>' +
+    '<span class="pill fmt">' + (t.format === 'nashville' ? 'Nashville' : 'On-site') + '</span>' +
+    '<span class="pill ' + (t.agreement_signed ? 'done' : 'wait') + '">' + (t.agreement_signed ? 'Agreement signed' : 'Awaiting agreement') + '</span>' +
+    crew + cancelled +
+    '<span class="t-actions">' +
+      '<button class="btn mini" data-act="copy" type="button">Copy link</button>' +
+      '<a class="btn mini ghost" href="' + esc(t.link) + '" target="_blank" rel="noopener">Open</a>' +
+      '<button class="btn mini ghost" data-act="resend" type="button">Resend</button>' +
+      '<button class="btn mini ghost" data-act="edit" type="button">Edit</button>' +
+    '</span>';
+
+  row.querySelector('[data-act=copy]').addEventListener('click', e => {
+    navigator.clipboard && navigator.clipboard.writeText(t.link);
+    e.target.textContent = 'Copied';
+    setTimeout(() => { e.target.textContent = 'Copy link'; }, 1500);
+  });
+
+  row.querySelector('[data-act=resend]').addEventListener('click', async e => {
+    const btn = e.target;
+    btn.disabled = true;
+    btn.textContent = 'Sending...';
+    try {
+      const res = await apiFetch('/api/admin/trainings', 'POST', { action: 'resend', token: t.token });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      btn.textContent = data.emailed ? 'Sent' : 'Not sent';
+    } catch (err) {
+      btn.textContent = 'Failed';
+      console.error('resend failed', err);
+    }
+    setTimeout(() => { btn.textContent = 'Resend'; btn.disabled = false; }, 2500);
+  });
+
+  row.querySelector('[data-act=edit]').addEventListener('click', () => {
+    if (row.querySelector('.edit-grid')) { row.querySelector('.edit-grid').remove(); return; }
+    row.appendChild(editPanel(t, row));
+  });
+
+  return row;
+}
+
+/* Editing exists because a typo in a company name or a wrong date otherwise
+   follows the training all the way into the executed agreement PDF. */
+function editPanel(t, row) {
+  const g = document.createElement('div');
+  g.className = 'edit-grid';
+  const date = String(t.training_date || '').slice(0, 10);
+  g.innerHTML =
+    '<div class="full"><label>Company</label><input data-f="company" value="' + esc(t.company || '') + '"></div>' +
+    '<div><label>Contact name</label><input data-f="contact_name" value="' + esc(t.contact_name || '') + '"></div>' +
+    '<div><label>Contact email</label><input data-f="contact_email" type="email" value="' + esc(t.contact_email || '') + '"></div>' +
+    '<div><label>Training date</label><input data-f="training_date" type="date" value="' + esc(date) + '"></div>' +
+    '<div><label>Format</label><select data-f="format">' +
+      '<option value="onsite"' + (t.format !== 'nashville' ? ' selected' : '') + '>On-site at contractor</option>' +
+      '<option value="nashville"' + (t.format === 'nashville' ? ' selected' : '') + '>Nashville (ReDry facility)</option>' +
+    '</select></div>' +
+    '<div><label>Meet</label><input data-f="meet_location" value="' + esc(t.meet_location || '') + '"></div>' +
+    '<div><label>Trainer</label><input data-f="trainer" value="' + esc(t.trainer || '') + '"></div>' +
+    '<div><label>Package</label><input data-f="package" value="' + esc(t.package || '') + '"></div>' +
+    '<div><label>Status</label><select data-f="status">' +
+      ['booked', 'agreement_signed', 'completed', 'cancelled'].map(v =>
+        '<option value="' + v + '"' + (t.status === v ? ' selected' : '') + '>' + v.replace('_', ' ') + '</option>').join('') +
+    '</select></div>' +
+    '<div class="full"><button class="btn go mini" data-act="save" type="button">Save changes</button> ' +
+      '<button class="btn mini ghost" data-act="close" type="button">Cancel</button>' +
+      '<span class="form-error" data-act="err" hidden></span></div>';
+
+  g.querySelector('[data-act=close]').addEventListener('click', () => g.remove());
+  g.querySelector('[data-act=save]').addEventListener('click', async e => {
+    const btn = e.target;
+    const err = g.querySelector('[data-act=err]');
+    const patch = { token: t.token };
+    g.querySelectorAll('[data-f]').forEach(i => { patch[i.dataset.f] = i.value.trim ? i.value.trim() : i.value; });
+    btn.disabled = true;
+    btn.textContent = 'Saving...';
+    try {
+      const res = await apiFetch('/api/admin/trainings', 'PATCH', patch);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || ('HTTP ' + res.status));
+      row.replaceWith(trainingRow({ ...t, ...data.training, link: data.training.link }));
+    } catch (ex) {
+      err.textContent = ex.message;
+      err.hidden = false;
+      btn.disabled = false;
+      btn.textContent = 'Save changes';
+    }
+  });
+  return g;
+}
+
 async function loadList() {
   try {
     const res = await api('GET');
-    if (res.ok) renderList((await res.json()).trainings);
+    if (res.ok) {
+      const data = await res.json();
+      renderList(data.trainings, data.total);
+    }
   } catch (err) { /* keep current list */ }
 }
 $('btnRefresh').addEventListener('click', loadList);
+let searchTimer = null;
+$('qSearch').addEventListener('input', () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(loadList, 250);
+});
+$('qAll').addEventListener('change', loadList);
 setInterval(() => { if (!$('stateApp').hidden) loadList(); }, 60000);
 
 boot();

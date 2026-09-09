@@ -1,119 +1,94 @@
-# Handoff: Roof MRI Contractor Onboarding Training Page
+# Handoff: Roof MRI Contractor Onboarding
 
 **Repo:** `adam1capps/mri-contractor-onboarding` · **Owner:** Adam Capps (adam@re-dry.com)
 
-## Current state (as of Jul 2, 2026)
+## Where it lives
 
-- PR #1 merged to `main`: the training prep + agreement execution page prototype.
-- PR from `claude/handoff-docs-7i5hz5`: backend build. Netlify functions + Neon for all three
-  endpoints, roster waiver-status flip with polling, all-signed notification, executed-agreement
-  PDF + SendGrid email, and the Nashville format render.
-- Files in repo:
-  - `training/index.html`: single-file page (all CSS/JS inline). Build notes in the HTML header
-    comment. Now calls the real API with graceful demo fallback when the API/database is
-    unavailable (deploy previews keep working). `?format=nashville` previews the Nashville
-    render; `?ptk={token}` opens the participant waiver view directly.
-  - `netlify/functions/`: Netlify Functions v2 with custom paths:
-    - `training-agreement.mjs`: `POST /api/training/:token/agreement`. Validates payload and
-      terms version (409 on mismatch), stores signature + IP/user agent/timestamp in Neon,
-      generates the executed-agreement PDF (pdf-lib), emails it to the signer and notifies
-      Adam/Regina. PDF/email are best effort; the DB row is the legal artifact.
-    - `training-participants.mjs`: `GET` (roster with signed status) and `POST` (add trainee;
-      server generates the waiver token and emails the signing link). POST requires the
-      agreement to be signed first (409 otherwise).
-    - `waiver-sign.mjs`: `POST /api/waiver/:ptk/sign`. Stores signature + metadata, idempotent
-      on re-sign, and emails Adam/Regina when the whole crew has signed.
-  - `netlify/lib/`: shared modules. `terms.mjs` is the canonical agreement text + TERMS_VERSION
-    (must stay in sync with the HTML); `pdf.mjs` (executed-agreement PDF); `email.mjs`
-    (SendGrid, same pattern as the re-dry.com intake fn); `db.mjs` (Neon client).
-  - `db/schema.sql`: canonical schema (trainings, agreements, participants) + demo seed row.
-  - `netlify.toml`, `package.json`: functions config (esbuild) and deps
-    (`@neondatabase/serverless`, `pdf-lib`).
-  - `_redirects`: Netlify 302 from site root to `/training/` (prototype convenience only).
-- Deployed on Netlify as project **contractor-onboarding** (deploy previews auto-build on PRs).
+- **Production: https://onboarding.roof-mri.com**, Netlify project `contractor-onboarding`
+  (site ID `5e973d6a-f425-453a-9b62-0ca1cf9a7228`), deploying from `main`.
+- Static pages publish from the repo root; API routes are Netlify Functions v2 with custom
+  paths (`netlify/functions/`), backed by Neon Postgres.
+- Netlify env vars, all set: `DATABASE_URL`, `CLERK_PUBLISHABLE_KEY`, `CLERK_SECRET_KEY`,
+  `SENDGRID_API_KEY`, `SITE_BASE_URL` (pinned to the branded domain so every emailed link
+  is correct regardless of Netlify's primary-URL setting). Optional: `EMAIL_FROM`,
+  `NOTIFY_EMAILS`, `ADMIN_EMAIL_DOMAINS` (default `re-dry.com`).
+- Netlify's Neon extension is installed on the team but is **discontinued for new database
+  creation**. The existing Neon database is the one to use; do not try to re-provision.
 
-## Setup needed before the backend is live (Adam or next session)
+## How one site serves every training
 
-1. Attach a Neon database to the Netlify project (sets `NETLIFY_DATABASE_URL`; `DATABASE_URL`
-   also works) and run `db/schema.sql` against it once.
-2. Netlify env vars: `SENDGRID_API_KEY` (emails are skipped with a console warning when unset),
-   optional `EMAIL_FROM` (default adam@re-dry.com), `NOTIFY_EMAILS` (comma-separated, default
-   adam@re-dry.com), `SITE_BASE_URL` (default https://connect.roof-mri.com).
-3. Housekeeping still pending, and it now blocks deploy previews: the repo default branch is
-   still `claude/roof-mri-training-agreement-liyg7r`, and Netlify's production branch matches
-   it, so deploy previews do NOT build for PRs targeting `main` (confirmed on PR #3: no
-   preview, production still serves the old branch). Fix: switch the GitHub default branch to
-   `main`, set the Netlify production branch to `main` (Site configuration > Build & deploy >
-   Branches), then delete the old branch. (Not possible via the tools available in remote
-   sessions.)
+One row in `trainings` per booked training, each with a random token. Nothing about a
+contractor is hardcoded anywhere.
 
-## What the page is
+1. Staff create the training in **`/admin/`** (Clerk sign-in, ReDry Google accounts only).
+2. The contractor gets `https://onboarding.roof-mri.com/training/{token}` by email.
+3. They execute the company Training Agreement on that page.
+4. The crew roster then unlocks; each trainee gets `/training/{token}/w/{ptk}` for their
+   personal field waiver. Rule on training day: no signed waiver, no roof.
 
-One personalized URL per booked training in the Roof MRI Connect stack (target:
-`connect.roof-mri.com/training/{token}`, Netlify functions + Neon). Two deliberate signature flows:
+The bare domain serves a neutral "use your personalized link" page. It must never render a
+named customer again: that was the old `/` to `/training/` redirect landing on the demo.
 
-1. **Company agreement**: authorized signer executes the Training Agreement (10-section
-   accordion, plain-English summary, draw/type signature, ESIGN consent checkboxes,
-   `TERMS_VERSION` stamped per signature).
-2. **Participant waivers**: after the agreement is signed, a crew roster unlocks; each trainee
-   gets a unique link (`/training/{token}/w/{ptk}`) to sign a personal field waiver. Rule: no
-   signed waiver, no roof. Roster chips flip to Signed (page polls every 20s).
+## Checking the database
 
-Demo data is hardcoded (Summit Commercial Roofing, Aug 13 2026, trainer Adam Capps,
-Professional package, `TRAINING_TOKEN = "demo-token"`) and will be injected server-side in prod.
+`/admin/` has a **Database** panel (Clerk-gated, `GET/POST /api/admin/db`). It reports
+whether a database is connected, which env var supplies the connection, whether every table
+**and column** exists, and how many trainings, agreements and waivers are stored. If
+anything is missing it offers a **Create the tables** button that applies the schema.
 
-## Admin console (added Jul 2026)
+Column checking matters: `CREATE TABLE IF NOT EXISTS` is a silent no-op against a table that
+exists but is missing a column, so a half-applied schema would otherwise look healthy right
+up until the first contractor tried to sign.
 
-- `/admin/` is Regina's console: create a training per contractor (company, contact, date,
-  package, trainer, meet location, onsite/nashville format with different form defaults per
-  format), optionally email the personalized link, and see every training's agreement/waiver
-  status with copyable links. Built on the Connect design system, vanilla JS.
-- Auth: Clerk (Google sign-in), enforced server-side in `netlify/lib/adminauth.mjs`; only
-  emails on `ADMIN_EMAIL_DOMAINS` (default `re-dry.com`) pass. Frontend loads ClerkJS v5 from
-  the instance's frontend API; the session token goes to the API as a Bearer header.
-- Endpoints: `GET /api/admin/config` (publishable key, public), `GET/POST /api/admin/trainings`
-  (Clerk-gated). `GET /api/training/:token` is public hydration data for the training page.
-- **Clerk setup still needed (Adam, one time)**: create a Clerk app, enable ONLY Google as a
-  sign-in option, add the site URL to allowed origins, then set Netlify env vars
-  `CLERK_PUBLISHABLE_KEY` and `CLERK_SECRET_KEY` (optional `ADMIN_EMAIL_DOMAINS`). Until then
-  `/admin/` shows a friendly "Almost ready" setup card.
-- Personalized routing is live: `_redirects` rewrites `/training/{token}` and
-  `/training/{token}/w/{ptk}` to the page, which reads the token from the path and hydrates
-  from the API (company, date, meet, trainer, package, format render, agreement-signed state).
-  `demo-token` still renders the built-in demo; unknown tokens go to the 404 page.
+`netlify/lib/schema.mjs` is the single source of truth. `db/schema.sql` is generated from it
+(`npm run schema:sql`) for anyone who prefers psql; `npm run schema:check` verifies the
+module's column list still matches its own DDL. Every statement is idempotent and safe to
+re-run against a database holding signed agreements. Constraints that can legitimately fail
+on existing data are applied separately and reported, never fatal.
 
-## Not built yet (natural next steps)
+## Conventions that are load-bearing
 
-- **Waiver personalization**: the waiver view shows company/date from the training, but does
-  not yet look up the participant by `ptk` to pre-fill their name or block re-signing client
-  side (the API is already idempotent server-side).
-- **Durable PDF storage**: `agreements.pdf_url` is reserved; executed PDFs currently exist only
-  as email attachments (Netlify Blobs or S3, then backfill the column).
-- **Nashville copy sign-off**: the Nashville render's travel/hotel and adjusted cancellation
-  copy is DRAFT and needs Adam's approval; the facility street address still needs to be
-  injected. Also open: whether Agreement Section 03 (roof list) should be varied for Nashville
-  trainings, since ReDry provides the roof. Terms changes require a TERMS_VERSION bump in BOTH
-  `netlify/lib/terms.mjs` and `training/index.html`.
-- **Waiver page hardening**: prod waiver view should look up the participant by `ptk` and show
-  their name/training details server-side.
+- **Never tell a signer something was recorded when it was not.** The demo fallback exists
+  only for `demo-token`; on a real token a failed write surfaces the error, keeps the draft,
+  and leaves the page unsigned.
+- **Nothing contractor-specific in the page shell.** The demo is data behind `demo-token`
+  and uses a fictional company.
+- Terms changes require a `TERMS_VERSION` bump in **both** `netlify/lib/terms.mjs` and
+  `training/index.html`. The page now compares its version against the server's and blocks
+  signing on a mismatch rather than letting every signature fail at submit time.
+- Work on a `claude/...` branch, push, open a **draft PR** against `main`.
+- GitHub access via the GitHub MCP tools; no `gh` CLI in remote sessions.
 
-## Standing design rules (per Adam, updated Jul 2026)
+## Design rules (per Adam, Jul 2026)
 
-- **Match the Roof MRI Connect app** (connect.roof-mri.com). Its design tokens are mirrored in
-  the `:root` block of `training/index.html`; when in doubt, pull the app's CSS bundle from
-  `/assets/*.css` and re-extract. Core system: Plus Jakarta Sans (400-800), off-white `#F7F8FA`
-  page with white cards (radius 10/16, soft layered shadows, gray-100/200 borders), navy
-  `#1E2C55` fills for topbar/hero/buttons (hover `#2a3d6e`), green `#00BD70` CTAs with hover
-  lift (hover `#00A862`), tinted status fills (green-light `#E6F9F0`, washes `#00bd7014/1f`),
-  pill badges (radius 100px, 10px, 700-800 weight, uppercase, letter-spacing .8px), form focus
-  rings `0 0 0 3px #00bd7014`, accents yellow `#F2C94C` and red `#EB5757`.
-- The pre-Jul-2026 rules (Trebuchet MS, navy/green as text and borders only, never fills) are
-  **retired**; older docs referencing them are stale.
-- Still standing: **no em dashes anywhere in copy** (including emails and PDFs).
+- **Match the Roof MRI Connect app** (connect.roof-mri.com). Tokens are mirrored in the
+  `:root` block of `training/index.html`: Plus Jakarta Sans, off-white `#F7F8FA` page with
+  white cards (radius 10/16, soft layered shadows), navy `#1E2C55` fills for topbar/hero and
+  buttons (hover `#2a3d6e`), green `#00BD70` CTAs (hover `#00A862`), tinted status fills,
+  pill badges, focus rings `0 0 0 3px #00bd7014`, accents yellow `#F2C94C`, red `#EB5757`.
+- The pre-Jul-2026 rules (Trebuchet MS, navy/green as text and borders only) are retired.
+- Still standing: **no em dashes anywhere in copy**, including emails and PDFs.
 
-## Session conventions
+## Still open
 
-- Work on a `claude/...` feature branch, push, open a **draft PR** against `main`.
-- GitHub access via the GitHub MCP tools (no `gh` CLI in the remote environment); repo scope
-  limited to this repo.
-- For design-heavy work on this app, load the `artifact-design` skill before writing UI.
+- **Executed agreement PDFs are not retrievable.** `agreements.pdf_url` is reserved and the
+  only copy is the email attachment. If SendGrid fails or the signer's address was mistyped,
+  the PDF exists nowhere, though the signature data is in Postgres. Worth adding
+  `GET /api/admin/trainings/:token/agreement.pdf` that re-renders from the stored row using
+  `netlify/lib/pdf.mjs`, since everything needed is already persisted.
+- **No way to remove a mistyped trainee.** A crew member added with a wrong email can never
+  be corrected, so that training never reads as fully signed. Needs an admin-only delete on
+  the participants route (only where `waiver_signed_at is null`).
+- **Waiver page does not identify the participant.** It should look up the `ptk` server side
+  and show their name, and block re-signing client side (the API is already idempotent).
+- **Foreign keys have no `ON DELETE`,** so a training with signatures cannot be deleted
+  without removing children first. Cancelling via the admin Status field is the intended
+  path; a real delete needs the constraint changed first.
+- **Waivers store no terms version,** unlike the company agreement. Needs a column before it
+  can be recorded.
+- **Nashville copy is DRAFT** and needs Adam's sign-off; the facility street address still
+  has to be injected. Open question: whether Agreement Section 03 (roof list) should differ
+  for Nashville, since ReDry provides the roof.
+- **`jimmy-nunez-onboarding`** is a separate Netlify site (`jimmynunez.roof-mri.com`), the
+  one-off-per-contractor pattern this site replaces. Folding it in means creating a training
+  here and pointing or retiring that site.

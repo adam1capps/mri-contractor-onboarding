@@ -1,4 +1,4 @@
-import { getSql, json, clientMeta } from '../lib/db.mjs';
+import { getSql, json, clientMeta, publicHandler } from '../lib/db.mjs';
 import { TERMS_VERSION } from '../lib/terms.mjs';
 import { buildAgreementPdf } from '../lib/pdf.mjs';
 import { sendEmail, notifyRecipients } from '../lib/email.mjs';
@@ -11,7 +11,7 @@ function siteBase() {
     .replace(/\/$/, '');
 }
 
-export default async (req, context) => {
+export default publicHandler(async (req, context) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   const sql = getSql();
   if (!sql) return json({ error: 'database not configured' }, 503);
@@ -45,6 +45,21 @@ export default async (req, context) => {
 
   const [training] = await sql`select * from trainings where token = ${token}`;
   if (!training) return json({ error: 'training not found' }, 404);
+
+  /* One executed agreement per training. Without this, two officers at the
+     contractor (or one person who signs again before hydration lands) produce
+     two agreement rows, two executed PDFs, and two notification emails for a
+     single training, and it is ambiguous which row is the legal artifact. */
+  const [existing] = await sql`
+    select signer_name, signed_at from agreements
+     where training_id = ${training.id} order by signed_at limit 1`;
+  if (existing) {
+    return json({
+      error: `This agreement was already executed by ${existing.signer_name}. `
+           + 'Reload the page to see the executed record.',
+      already_signed: true,
+    }, 409);
+  }
 
   const { ip, userAgent } = clientMeta(req, context);
 
@@ -111,6 +126,6 @@ export default async (req, context) => {
     terms_version: TERMS_VERSION,
     emailed,
   });
-};
+});
 
 export const config = { path: '/api/training/:token/agreement' };
