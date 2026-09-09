@@ -42,6 +42,20 @@ export function json(data, status = 200) {
   });
 }
 
+/* Public endpoints must not answer a database problem with a bare 500. The page
+   treats a clean error as a real failure and tells the contractor, whereas an
+   unhandled throw is indistinguishable from a bug. */
+export function publicHandler(fn) {
+  return async (req, context) => {
+    try {
+      return await fn(req, context);
+    } catch (err) {
+      console.error('unhandled error in public handler', err);
+      return json({ error: 'database unavailable, please try again' }, 503);
+    }
+  };
+}
+
 export function clientMeta(req, context) {
   const ip = context?.ip
     || req.headers.get('x-nf-client-connection-ip')

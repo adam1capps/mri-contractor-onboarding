@@ -9,6 +9,7 @@
     "pdf-lib": "^1.17.1"
   },
   "scripts": {
-    "schema:sql": "node scripts/gen-schema-sql.mjs"
+    "schema:sql": "node scripts/gen-schema-sql.mjs",
+    "schema:check": "node scripts/check-schema.mjs"
   }
 }

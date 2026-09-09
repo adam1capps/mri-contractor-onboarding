@@ -1,15 +1,26 @@
-import { getSql, json, clientMeta } from '../lib/db.mjs';
+import { getSql, json, clientMeta, publicHandler } from '../lib/db.mjs';
 import { sendEmail } from '../lib/email.mjs';
 import { randomUUID } from 'node:crypto';
 
 const EMAIL_RE = /.+@.+\..+/;
+const MAX_CREW = 50;
+
+/* The training link gets forwarded around a contractor's office. The roster
+   only needs enough of the address to tell two people apart, so the public
+   read returns a masked form rather than the crew's full contact list. */
+function maskEmail(email) {
+  const [user, domain] = String(email).split('@');
+  if (!domain) return '';
+  const head = user.slice(0, 1);
+  return `${head}${'*'.repeat(Math.max(user.length - 1, 1))}@${domain}`;
+}
 
 function siteBase() {
   return (process.env.SITE_BASE_URL || process.env.URL || 'https://onboarding.roof-mri.com')
     .replace(/\/$/, '');
 }
 
-export default async (req, context) => {
+export default publicHandler(async (req, context) => {
   const sql = getSql();
   if (!sql) return json({ error: 'database not configured' }, 503);
 
@@ -24,7 +35,7 @@ export default async (req, context) => {
     return json({
       participants: rows.map(r => ({
         name: r.name,
-        email: r.email,
+        email: maskEmail(r.email),
         waiver_token: r.waiver_token,
         signed: !!r.waiver_signed_at,
         waiver_signed_at: r.waiver_signed_at,
@@ -50,6 +61,12 @@ export default async (req, context) => {
   const email = String(body.email || '').trim();
   if (name.length < 2 || !EMAIL_RE.test(email)) {
     return json({ error: 'participant name and a valid email are required' }, 400);
+  }
+
+  const [{ crew }] = await sql`
+    select count(*)::int as crew from participants where training_id = ${training.id}`;
+  if (crew >= MAX_CREW) {
+    return json({ error: `This roster is capped at ${MAX_CREW} trainees. Contact ReDry if you need more.` }, 409);
   }
 
   /* Adding the same person twice creates a second waiver token that nobody
@@ -103,6 +120,6 @@ export default async (req, context) => {
     participant: { name, email, waiver_token: waiverToken, signed: false },
     link,
   });
-};
+});
 
 export const config = { path: '/api/training/:token/participants' };

@@ -46,16 +46,20 @@ NEON SCHEMA (canonical copy: db/schema.sql)
                waiver_sig_type, waiver_sig_data, ip, user_agent,
                waiver_signed_at)
 
-ENDPOINTS (implemented as Netlify Functions v2 in netlify/functions/;
-page falls back to demo mode when the API or database is unavailable)
+ENDPOINTS (implemented as Netlify Functions v2 in netlify/functions/)
+  Demo fallback applies ONLY to demo-token. On a real token a failed write
+  surfaces the error and nothing is marked signed: telling a contractor the
+  agreement is executed, or a trainee that the waiver is signed, when nothing
+  reached the database is the one outcome this page must never produce.
   submitAgreement(payload)  ->  POST /api/training/:token/agreement
   addParticipant(payload)   ->  POST /api/training/:token/participants
   loadRoster()              ->  GET  /api/training/:token/participants
   submitWaiver(payload)     ->  POST /api/waiver/:ptk/sign
 
 FORMAT RENDERS
-  trainings.format = 'onsite' (default) or 'nashville'. Preview the
-  Nashville render with ?format=nashville (travel/hotel prep, ReDry
+  trainings.format = 'onsite' (default) or 'nashville'. The server's
+  format governs a real training; ?format=nashville previews the
+  Nashville render on the demo page only (travel/hotel prep, ReDry
   facility, roof provided by ReDry, adjusted day-of cancellation).
   Nashville policy copy is DRAFT and needs Adam's sign-off.
 
@@ -1363,6 +1367,15 @@ function applyTraining(t) {
   document.getElementById('fCompany').value = t.company;
   document.getElementById('waiverMeta').textContent =
     (t.company + ' · Training date ' + dateLabel + ' · ReDry LLC').toUpperCase();
+  /* The agreement text lives in this page and the version is checked by the
+     server at submit time. If the two ever drift, every signature would be
+     rejected with no explanation, so stop here and say so plainly rather than
+     letting someone sign terms we would refuse to record. */
+  if (t.terms_version && t.terms_version !== TERMS_VERSION) {
+    console.error('terms version drift: page ' + TERMS_VERSION + ', server ' + t.terms_version);
+    showStaleTerms();
+    return;
+  }
   if (t.agreement_signed && !document.getElementById('executed').classList.contains('show')) {
     const card = document.getElementById('signCard');
     card.style.display = 'none';
@@ -1382,6 +1395,21 @@ function applyTraining(t) {
     const card = document.getElementById('signCard');
     if (card) card.style.display = '';
   }
+}
+
+/* The agreement on screen is not the one the server would record. Block signing
+   rather than let someone execute terms that will be rejected. */
+function showStaleTerms() {
+  const card = document.getElementById('signCard');
+  if (card) card.style.display = 'none';
+  const btn = document.getElementById('btnSign');
+  if (btn) btn.disabled = true;
+  const note = document.createElement('div');
+  note.className = 'plain';
+  note.innerHTML = '<b>This page is out of date.</b> The Training Agreement has been updated since '
+    + 'this page was loaded. Please refresh to get the current version before signing. '
+    + 'If refreshing does not help, email adam@re-dry.com.';
+  if (card && card.parentNode) card.parentNode.insertBefore(note, card);
 }
 
 /* An unreachable API used to fall through to the built-in demo, which meant a

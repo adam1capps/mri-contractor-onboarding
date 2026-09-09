@@ -1,4 +1,4 @@
-import { getSql, json, clientMeta } from '../lib/db.mjs';
+import { getSql, json, clientMeta, publicHandler } from '../lib/db.mjs';
 import { TERMS_VERSION } from '../lib/terms.mjs';
 import { buildAgreementPdf } from '../lib/pdf.mjs';
 import { sendEmail, notifyRecipients } from '../lib/email.mjs';
@@ -11,7 +11,7 @@ function siteBase() {
     .replace(/\/$/, '');
 }
 
-export default async (req, context) => {
+export default publicHandler(async (req, context) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   const sql = getSql();
   if (!sql) return json({ error: 'database not configured' }, 503);
@@ -126,6 +126,6 @@ export default async (req, context) => {
     terms_version: TERMS_VERSION,
     emailed,
   });
-};
+});
 
 export const config = { path: '/api/training/:token/agreement' };

@@ -1,9 +1,9 @@
-import { getSql, json, clientMeta } from '../lib/db.mjs';
+import { getSql, json, clientMeta, publicHandler } from '../lib/db.mjs';
 import { sendEmail, notifyRecipients } from '../lib/email.mjs';
 
 const MAX_SIG_BYTES = 2_000_000;
 
-export default async (req, context) => {
+export default publicHandler(async (req, context) => {
   if (req.method !== 'POST') return json({ error: 'method not allowed' }, 405);
   const sql = getSql();
   if (!sql) return json({ error: 'database not configured' }, 503);
@@ -46,8 +46,7 @@ export default async (req, context) => {
         waiver_sig_data = ${sigData},
         ip = ${ip},
         user_agent = ${userAgent},
-        waiver_signed_at = now(),
-        name = ${name}
+        waiver_signed_at = now()
     where id = ${participant.id}
     returning waiver_signed_at`;
 
@@ -79,6 +78,6 @@ export default async (req, context) => {
   }
 
   return json({ ok: true, signed_at: updated.waiver_signed_at, all_signed: allSigned });
-};
+});
 
 export const config = { path: '/api/waiver/:ptk/sign' };
