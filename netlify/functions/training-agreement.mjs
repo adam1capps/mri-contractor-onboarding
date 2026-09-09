@@ -46,6 +46,21 @@ export default async (req, context) => {
   const [training] = await sql`select * from trainings where token = ${token}`;
   if (!training) return json({ error: 'training not found' }, 404);
 
+  /* One executed agreement per training. Without this, two officers at the
+     contractor (or one person who signs again before hydration lands) produce
+     two agreement rows, two executed PDFs, and two notification emails for a
+     single training, and it is ambiguous which row is the legal artifact. */
+  const [existing] = await sql`
+    select signer_name, signed_at from agreements
+     where training_id = ${training.id} order by signed_at limit 1`;
+  if (existing) {
+    return json({
+      error: `This agreement was already executed by ${existing.signer_name}. `
+           + 'Reload the page to see the executed record.',
+      already_signed: true,
+    }, 409);
+  }
+
   const { ip, userAgent } = clientMeta(req, context);
 
   const [agreement] = await sql`

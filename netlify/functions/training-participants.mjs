@@ -1,5 +1,6 @@
 import { getSql, json, clientMeta } from '../lib/db.mjs';
 import { sendEmail } from '../lib/email.mjs';
+import { randomUUID } from 'node:crypto';
 
 const EMAIL_RE = /.+@.+\..+/;
 
@@ -51,7 +52,28 @@ export default async (req, context) => {
     return json({ error: 'participant name and a valid email are required' }, 400);
   }
 
-  const waiverToken = crypto.randomUUID().replaceAll('-', '').slice(0, 12);
+  /* Adding the same person twice creates a second waiver token that nobody
+     will ever sign, so the crew never reads as fully signed and the "all
+     waivers in" notification never fires. Return the row they already have. */
+  const [existing] = await sql`
+    select name, email, waiver_token, waiver_signed_at from participants
+     where training_id = ${training.id} and lower(email) = lower(${email})
+     limit 1`;
+  if (existing) {
+    return json({
+      ok: true,
+      already_added: true,
+      participant: {
+        name: existing.name,
+        email: existing.email,
+        waiver_token: existing.waiver_token,
+        signed: Boolean(existing.waiver_signed_at),
+      },
+      link: `${siteBase()}/training/${token}/w/${existing.waiver_token}`,
+    });
+  }
+
+  const waiverToken = randomUUID().replaceAll('-', '').slice(0, 12);
   await sql`
     insert into participants (training_id, name, email, waiver_token)
     values (${training.id}, ${name}, ${email}, ${waiverToken})`;

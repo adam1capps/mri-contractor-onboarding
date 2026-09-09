@@ -7,5 +7,8 @@
     "@clerk/backend": "^1.24.0",
     "@neondatabase/serverless": "^0.10.4",
     "pdf-lib": "^1.17.1"
+  },
+  "scripts": {
+    "schema:sql": "node scripts/gen-schema-sql.mjs"
   }
 }

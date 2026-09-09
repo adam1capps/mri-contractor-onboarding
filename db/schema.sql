@@ -1,6 +1,13 @@
 -- Roof MRI Connect: contractor onboarding schema (Neon / Postgres)
--- Run once against the Neon database wired to the Netlify project
--- (env NETLIFY_DATABASE_URL or DATABASE_URL).
+--
+-- GENERATED FILE. Do not edit by hand.
+-- Source of truth: netlify/lib/schema.mjs   Regenerate: npm run schema:sql
+--
+-- You do not need to run this manually: sign in to /admin/ and use the
+-- database panel, which applies exactly these statements. This file is here
+-- for anyone who would rather run it with psql against NETLIFY_DATABASE_URL
+-- or DATABASE_URL. Every statement is idempotent and safe to re-run against a
+-- database that already holds signed agreements.
 
 create table if not exists trainings (
   id            serial primary key,
@@ -26,12 +33,12 @@ create table if not exists agreements (
   signer_title  text not null,
   signer_email  text not null,
   sig_type      text not null check (sig_type in ('draw', 'type')),
-  sig_data      text not null,          -- data URL (draw) or typed name (type)
+  sig_data      text not null,
   ip            text,
   user_agent    text,
   terms_version text not null,
   signed_at     timestamptz not null default now(),
-  pdf_url       text                    -- reserved: populated once PDFs get durable storage
+  pdf_url       text
 );
 
 create table if not exists participants (
@@ -48,9 +55,12 @@ create table if not exists participants (
 );
 
 create index if not exists participants_training_idx on participants (training_id);
+
 create index if not exists agreements_training_idx on agreements (training_id);
 
--- Demo seed matching the prototype page (safe to re-run)
-insert into trainings (token, company, training_date, meet_location, trainer, package, format)
-values ('demo-token', 'Summit Commercial Roofing', '2026-08-13', '8:00 AM, Summit''s Office', 'Adam Capps', 'Professional', 'onsite')
-on conflict (token) do nothing;
+-- Data-quality constraints (applied separately; a failure here is not fatal).
+
+-- stops the same trainee being added twice, which would leave a waiver permanently unsigned
+-- Fails if existing rows already violate it; clean the duplicates, then re-run.
+create unique index if not exists participants_training_email_uniq
+            on participants (training_id, lower(email));

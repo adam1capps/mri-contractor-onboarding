@@ -1,5 +1,6 @@
-# Land the bare site URL on the training page (demo render).
-/  /training/  302
+# The bare domain serves index.html: a neutral "use your personalized link"
+# page. It used to 302 to /training/, which rendered the built-in demo, so the
+# front door showed one named customer's company, office and training date.
 
 # Personalized training pages: the page reads the token (and waiver token)
 # from the path and hydrates from GET /api/training/:token.
