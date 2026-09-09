@@ -10,6 +10,7 @@
   },
   "scripts": {
     "schema:sql": "node scripts/gen-schema-sql.mjs",
-    "schema:check": "node scripts/check-schema.mjs"
+    "schema:check": "node scripts/check-schema.mjs",
+    "test": "node scripts/test-schema.mjs && node scripts/test-handlers.mjs && node scripts/check-schema.mjs"
   }
 }
